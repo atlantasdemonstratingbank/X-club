@@ -1449,7 +1449,7 @@ footer {
   gap: 1.5rem;
   transition: opacity .4s;
 }
-#appLoader.hidden { opacity: 0; pointer-events: none; }
+#appLoader.hidden { opacity: 0; pointer-events: none; display: none; }
 .loader-logo {
   font-family: var(--font-display);
   font-size: 2.5rem;

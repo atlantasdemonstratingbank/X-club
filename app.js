@@ -1260,10 +1260,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initParticles();
 
-  /* Loader safety net — if auth never fires within 6s, force-show home */
+  /* Loader safety net — force-remove loader after 3s no matter what */
   const _loaderTimeout = setTimeout(() => {
     const loader = document.getElementById('appLoader');
-    if (loader && loader.style.display !== 'none' && !loader.classList.contains('hidden')) {
+    if (loader) {
       console.warn('[XClub] Loader timeout — forcing home page');
       loader.classList.add('hidden');
       setTimeout(() => loader.remove(), 400);
@@ -1271,11 +1271,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       showPage('home');
       applyT(); renderAll();
     }
-  }, 6000);
+  }, 3000);
 
-  /* Load Firebase */
+  /* Load Firebase — with 4s timeout so it never hangs forever */
   try {
-    await window.XFire.load();
+    await Promise.race([
+      window.XFire.load(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 4000))
+    ]);
     window.XFire.onAuthChange(user => {
       clearTimeout(_loaderTimeout);
       onAuthStateChange(user);
