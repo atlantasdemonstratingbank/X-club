@@ -34,24 +34,53 @@ const XDB = {
 let _app, _auth, _db;
 
 async function loadFirebaseSDKs() {
-  const imports = await Promise.all([
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js')
-  ]);
-  const { initializeApp }                              = imports[0];
-  const { getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-          createUserWithEmailAndPassword, signOut,
-          sendPasswordResetEmail, GoogleAuthProvider,
-          signInWithPopup, updateProfile }             = imports[1];
-  const { getDatabase, ref, set, get, push, update,
-          remove, onValue, off, serverTimestamp,
-          onDisconnect, query, orderByChild,
-          limitToLast, equalTo }                       = imports[2];
+  const fb = window.firebase;
+  if (!fb) throw new Error('Firebase compat SDK not loaded');
 
-  _app  = initializeApp(FIREBASE_CONFIG);
-  _auth = getAuth(_app);
-  _db   = getDatabase(_app);
+  _app  = fb.initializeApp(FIREBASE_CONFIG);
+  _auth = fb.auth();
+  _db   = fb.database();
+
+  // Wrap compat API to match modular-style usage in the rest of the codebase
+  const dbRef  = (path) => _db.ref(path);
+  const authRef = _auth;
+
+  window._FB = {
+    auth: _auth, db: _db,
+    /* Auth */
+    onAuthStateChanged: (auth, cb) => auth.onAuthStateChanged(cb),
+    signInWithEmailAndPassword:    (auth, e, p)    => auth.signInWithEmailAndPassword(e, p),
+    createUserWithEmailAndPassword:(auth, e, p)    => auth.createUserWithEmailAndPassword(e, p),
+    signOut:                       (auth)          => auth.signOut(),
+    sendPasswordResetEmail:        (auth, e)       => auth.sendPasswordResetEmail(e),
+    GoogleAuthProvider:            fb.auth.GoogleAuthProvider,
+    signInWithPopup:               (auth, prov)    => auth.signInWithPopup(prov),
+    updateProfile:                 (user, data)    => user.updateProfile(data),
+    /* DB helpers — wrap compat refs to behave like modular API */
+    ref:       (db, path) => db.ref(path),
+    set:       (ref, val) => ref.set(val),
+    get:       (ref)      => ref.once('value'),
+    push:      (ref, val) => ref.push(val),
+    update:    (ref, val) => ref.update(val),
+    remove:    (ref)      => ref.remove(),
+    onValue:   (ref, cb)  => { ref.on('value', cb); return ref; },
+    off:       (ref)      => ref.off(),
+    serverTimestamp: () => fb.database.ServerValue.TIMESTAMP,
+    onDisconnect: (ref)   => ref.onDisconnect(),
+    query:     (ref, ...constraints) => {
+      let q = ref;
+      for (const c of constraints) q = c(q);
+      return q;
+    },
+    orderByChild:(c) => (ref) => ref.orderByChild(c),
+    limitToLast: (n) => (ref) => ref.limitToLast(n),
+    equalTo:     (v) => (ref) => ref.equalTo(v),
+    XDB
+  };
+
+  initPresence();
+  return window._FB;
+}
 
   window._FB = {
     auth: _auth, db: _db,
