@@ -1,0 +1,167 @@
+      class="auth-title" data-i18n="auth.login.title">Welcome back</h2>
+      <p class="auth-sub" data-i18n="auth.login.sub">Sign in to your X Club account</p>
+      <div class="auth-form">
+        <div class="form-group"><label class="form-label" for="loginEmail" data-i18n="auth.login.email">Email</label><input type="email" id="loginEmail" autocomplete="email"></div>
+        <div class="form-group"><label class="form-label" for="loginPassword" data-i18n="auth.login.password">Password</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
+        <button class="btn btn-gold btn-block" id="loginBtn" onclick="handleLogin(event)" data-i18n="auth.login.btn">Sign In</button>
+        <div class="auth-divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" onclick="handleGoogleLogin()" data-i18n="auth.login.google">Continue with Google</button>
+        <div style="text-align:center"><a onclick="showPage('reset');playClick()" style="font-size:.78rem;color:var(--silver-dim);cursor:pointer" data-i18n="auth.login.forgot">Forgot password?</a></div>
+      </div>
+      <div class="auth-switch"><span data-i18n="auth.login.noAccount">Not a member yet?</span> <a onclick="showPage('register');playClick()" data-i18n="auth.login.apply">Apply</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────── REGISTER PAGE ──────────────── -->
+<div id="page-register" class="page">
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">X<span>·</span>Club</div>
+      <h2 class="auth-title" data-i18n="auth.register.title">Create Account</h2>
+      <p class="auth-sub" data-i18n="auth.register.sub">Begin your X Club journey</p>
+      <div class="auth-form">
+        <div class="form-group"><label class="form-label" for="regName" data-i18n="auth.register.name">Full Name</label><input type="text" id="regName" autocomplete="name"></div>
+        <div class="form-group"><label class="form-label" for="regEmail" data-i18n="auth.login.email">Email</label><input type="email" id="regEmail" autocomplete="email"></div>
+        <div class="form-group"><label class="form-label" for="regPassword" data-i18n="auth.login.password">Password</label><input type="password" id="regPassword" autocomplete="new-password" placeholder="At least 8 characters"></div>
+        <button class="btn btn-gold btn-block" id="regBtn" onclick="handleRegister(event)" data-i18n="auth.register.btn">Create Account</button>
+        <div class="auth-divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" onclick="handleGoogleLogin()" data-i18n="auth.login.google">Continue with Google</button>
+      </div>
+      <div class="auth-switch"><span data-i18n="auth.register.have">Already a member?</span> <a onclick="showPage('login');playClick()" data-i18n="auth.register.signin">Sign In</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────── RESET PASSWORD PAGE ──────────────── -->
+<div id="page-reset" class="page">
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">X<span>·</span>Club</div>
+      <h2 class="auth-title" data-i18n="auth.reset.title">Reset Password</h2>
+      <p class="auth-sub" data-i18n="auth.reset.sub">Enter your email to receive a reset link</p>
+      <div class="auth-form">
+        <div class="form-group"><label class="form-label" for="resetEmail" data-i18n="auth.login.email">Email</label><input type="email" id="resetEmail" autocomplete="email"></div>
+        <button class="btn btn-gold btn-block" onclick="handleForgotPassword()" data-i18n="auth.reset.btn">Send Reset Link</button>
+        <div style="text-align:center"><a onclick="showPage('login');playClick()" style="font-size:.78rem;color:var(--silver-dim);cursor:pointer" data-i18n="auth.reset.back">Back to Sign In</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main><!-- /main-content -->
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+
+<!-- Bid Modal -->
+<div id="bidModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="bidModalTitle">
+  <div class="modal">
+    <button class="modal-close" onclick="closeBidModal()" aria-label="Close">✕</button>
+    <span class="badge badge-gold" id="bidItemBadge" style="margin-bottom:.75rem">Fine Art</span>
+    <h3 class="modal-title" id="bidModalTitle" data-i18n="auction.bidNow">Place a Bid</h3>
+    <p class="modal-subtitle" id="bidModalDesc"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+      <div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--silver-dim);margin-bottom:.3rem" data-i18n="bid.currentBid">Current Bid</div><div style="font-family:var(--font-display);font-size:1.6rem;color:var(--gold)" id="bidCurrentAmt">$0</div></div>
+      <div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--silver-dim);margin-bottom:.3rem" data-i18n="bid.timeLeft">Time Remaining</div><div style="font-size:1rem;font-weight:500" id="bidTimeLeft">—</div></div>
+    </div>
+    <div class="modal-form">
+      <div class="form-group"><label class="form-label" for="bidAmount" data-i18n="bid.yourBid">Your Bid (USD)</label><input type="number" id="bidAmount" placeholder="0" min="0" step="10000"><span style="font-size:.68rem;color:var(--silver-dim);margin-top:.3rem" data-i18n="bid.minBid">Minimum increment: $10,000</span></div>
+      <div class="form-group"><label class="form-label" for="proxyBid" data-i18n="bid.proxyBid">Proxy Bid / Max Bid (optional)</label><input type="number" id="proxyBid" placeholder="0" min="0" step="10000"><span style="font-size:.68rem;color:var(--silver-dim);margin-top:.3rem" data-i18n="bid.proxyHelper">We'll bid automatically up to your maximum.</span></div>
+      <p class="modal-note" data-i18n="bid.privacyNote">All transactions are conducted exclusively through X Club.</p>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn btn-ghost" style="flex:1" onclick="closeBidModal()" data-i18n="bid.cancel">Cancel</button>
+        <button class="btn btn-gold" style="flex:1" onclick="placeBid()" data-i18n="bid.place">Place Bid</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Curator Modal -->
+<div id="curatorModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="curatorModalTitle">
+  <div class="modal">
+    <button class="modal-close" onclick="closeCuratorModal()" aria-label="Close">✕</button>
+    <h3 class="modal-title" id="curatorModalTitle" data-i18n="curator.title">Contact Your Curator</h3>
+    <p class="modal-subtitle" data-i18n="curator.subtitle">Our curators assist you personally — by phone, video call, or message.</p>
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.callBtn">📱 Request a Call</button>
+      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.videoBtn">🎥 Schedule Video Call</button>
+      <button class="btn btn-ghost btn-block" onclick="closeCuratorModal();showPage('messages');playClick()" data-i18n="curator.msgBtn">💬 Send a Message</button>
+    </div>
+    <p class="modal-note" style="margin-top:1.25rem" data-i18n="curator.hours">Available Mon–Fri, 8:00–20:00 CET. Emergency assistance 24/7 for Private members.</p>
+  </div>
+</div>
+
+<!-- Privacy Violation Modal -->
+<div id="privacyModal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="privacyModalTitle">
+  <div class="modal">
+    <h3 class="modal-title" id="privacyModalTitle" data-i18n="privacyModal.title">Privacy Notice</h3>
+    <p class="modal-subtitle" data-i18n="privacyModal.desc">It appears you are attempting to share personal contact information. This violates the membership agreement.</p>
+    <div class="privacy-modal-warning" data-i18n="privacyModal.warning">A violation may result in immediate suspension.</div>
+    <button class="btn btn-gold btn-block" onclick="closePrivacyModal()" data-i18n="privacyModal.understood">Understood — Keep my message private</button>
+  </div>
+</div>
+
+<!-- Application Success Modal -->
+<div id="successModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="successModalTitle">
+  <div class="modal" style="text-align:center">
+    <div style="font-size:3rem;margin-bottom:1rem">✦</div>
+    <h3 class="modal-title" id="successModalTitle" data-i18n="success.title">Application Received</h3>
+    <p class="modal-subtitle" data-i18n="success.desc">Thank you for your application. It will be carefully reviewed. You will receive a response within 5 business days.</p>
+    <span class="badge badge-gold" style="margin-bottom:1.25rem" data-i18n="success.badge">Reference: XC-2025-04811</span>
+    <button class="btn btn-gold btn-block" onclick="closeSuccessModal();showPage('home')" data-i18n="success.btn">Return to X Club</button>
+  </div>
+</div>
+
+<!-- Push Notification Permission Modal -->
+<div id="pushModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pushModalTitle">
+  <div class="modal" style="text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">🔔</div>
+    <h3 class="modal-title" id="pushModalTitle" data-i18n="push.title">Stay Informed</h3>
+    <p class="modal-subtitle" data-i18n="push.body">Enable notifications to receive bid updates, messages, and event reminders.</p>
+    <div style="display:flex;gap:.75rem;margin-top:.5rem">
+      <button class="btn btn-ghost" style="flex:1" onclick="skipPush()" data-i18n="push.skip">Not now</button>
+      <button class="btn btn-gold" style="flex:1" onclick="allowPush()" data-i18n="push.allow">Allow Notifications</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PWA INSTALL BANNER ═══════════════════ -->
+<div id="installBanner" role="complementary" aria-label="Install X Club">
+  <div style="font-size:1.4rem">📱</div>
+  <div class="install-text">
+    <strong data-i18n="install.title">Install X Club</strong>
+    <span data-i18n="install.body">Add to your home screen for the best experience.</span>
+  </div>
+  <button class="btn btn-gold btn-sm" onclick="promptInstall()" data-i18n="install.btn">Install</button>
+  <button class="btn btn-ghost btn-sm" onclick="dismissInstall()" data-i18n="install.dismiss">Dismiss</button>
+</div>
+
+<!-- ═══════════════════════════════ TOAST CONTAINER ══════════════════════ -->
+<div id="toastContainer" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ═══════════════════════════════ ACCESSIBILITY PANEL ══════════════════ -->
+<button id="a11yBtn" aria-label="Accessibility options" aria-expanded="false" aria-controls="a11yPanel">♿</button>
+<div id="a11yPanel" role="region" aria-label="Accessibility settings">
+  <div class="a11y-title" data-i18n="a11y.title">Accessibility</div>
+  <div class="a11y-row">
+    <span class="a11y-row-label" data-i18n="a11y.largerText">Larger Text</span>
+    <div class="toggle" id="largeFontToggle" onclick="toggleLargeFont()" role="switch" aria-checked="false" tabindex="0"></div>
+  </div>
+  <div class="a11y-row">
+    <span class="a11y-row-label" data-i18n="a11y.highContrast">High Contrast</span>
+    <div class="toggle" id="a11yContrastToggle" onclick="toggleContrast()" role="switch" aria-checked="false" tabindex="0"></div>
+  </div>
+  <div class="a11y-row">
+    <span class="a11y-row-label" data-i18n="a11y.sound">Sound Effects</span>
+    <div class="toggle on" id="a11ySoundToggle" onclick="toggleSound()" role="switch" aria-checked="true" tabindex="0"></div>
+  </div>
+  <button class="btn btn-ghost btn-sm btn-block" style="margin-top:.75rem" onclick="showCuratorModal();toggleA11yPanel()" data-i18n="a11y.needHelp">Need help? Call a Curator</button>
+</div>
+
+<!-- ═══════════════════════════════ SCRIPTS ══════════════════════════════ -->
+<script src="firebase.js"></script>
+<script src="cloudinary.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
