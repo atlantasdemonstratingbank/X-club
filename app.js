@@ -1260,11 +1260,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initParticles();
 
+  /* Loader safety net — if auth never fires within 6s, force-show home */
+  const _loaderTimeout = setTimeout(() => {
+    const loader = document.getElementById('appLoader');
+    if (loader && loader.style.display !== 'none' && !loader.classList.contains('hidden')) {
+      console.warn('[XClub] Loader timeout — forcing home page');
+      loader.classList.add('hidden');
+      setTimeout(() => loader.style.display = 'none', 500);
+      updateNavForGuest();
+      showPage('home');
+      applyT(); renderAll();
+    }
+  }, 6000);
+
   /* Load Firebase */
   try {
     await window.XFire.load();
-    window.XFire.onAuthChange(onAuthStateChange);
+    window.XFire.onAuthChange(user => {
+      clearTimeout(_loaderTimeout);
+      onAuthStateChange(user);
+    });
   } catch(err) {
+    clearTimeout(_loaderTimeout);
     console.error('[XClub] Firebase failed to load:', err);
     const loader = document.getElementById('appLoader');
     if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.style.display='none', 500); }
