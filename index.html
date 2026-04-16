@@ -1,4 +1,488 @@
-      class="auth-title" data-i18n="auth.login.title">Welcome back</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#D4AF37">
+  <meta name="description" content="X Club — The world's most exclusive private digital club for verified high-net-worth individuals.">
+  <title>X Club</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+
+<!-- ═══════════════════════════════ APP LOADER ════════════════════════════ -->
+<div id="appLoader" style="position:fixed;inset:0;background:#080c14;display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:1.5rem">
+  <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:2.8rem;color:#D4AF37;letter-spacing:.15em">X<span style="color:#C0C8D4">·</span>Club</div>
+  <div style="width:48px;height:2px;background:rgba(212,175,55,.18);position:relative;overflow:hidden;border-radius:2px">
+    <div style="position:absolute;inset:0;background:#D4AF37;animation:loaderBar 1.4s ease-in-out infinite"></div>
+  </div>
+</div>
+<style>@keyframes loaderBar{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}</style>
+
+<!-- ═══════════════════════════════ NAVIGATION ═══════════════════════════ -->
+<nav id="mainNav" role="navigation" aria-label="Main navigation">
+  <a class="nav-logo" onclick="showPage('home');playClick()" aria-label="X Club Home">X<span>·</span>Club</a>
+  <a class="nav-skip" href="#mainContent" data-i18n="nav.skipToContent">Skip to content</a>
+
+  <!-- Language selector -->
+  <div class="lang-selector" id="langSelector" onclick="toggleLangMenu()" aria-label="Language" role="button" tabindex="0">
+    <span id="currentLangFlag">🇬🇧</span>
+    <span id="currentLangCode">EN</span>
+    <div class="lang-menu" id="langMenu">
+      <div onclick="setLang('en');event.stopPropagation()">🇬🇧 EN</div>
+      <div onclick="setLang('pt');event.stopPropagation()">🇵🇹 PT</div>
+      <div onclick="setLang('es');event.stopPropagation()">🇪🇸 ES</div>
+      <div onclick="setLang('de');event.stopPropagation()">🇩🇪 DE</div>
+    </div>
+  </div>
+
+  <!-- Hamburger -->
+  <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu" aria-expanded="false">☰</button>
+
+  <!-- Nav links -->
+  <div class="nav-links" id="navLinks" role="menubar">
+    <a onclick="showPage('home');playClick()" role="menuitem" data-i18n="nav.home">Home</a>
+    <a onclick="showPage('membership');playClick()" role="menuitem" data-i18n="nav.membership">Membership</a>
+    <a onclick="showPage('auctions');playClick()" role="menuitem" data-i18n="nav.auctions">Auctions</a>
+    <a onclick="showPage('events');playClick()" role="menuitem" data-i18n="nav.events">Events</a>
+    <a id="navDash" onclick="showPage('dashboard');playClick()" role="menuitem" style="display:none" data-i18n="nav.dashboard">Dashboard</a>
+    <span id="navUserName" style="display:none;font-size:.78rem;color:var(--silver-dim);padding:.5rem 0"></span>
+    <a id="navApply" class="btn btn-gold btn-sm" onclick="showPage('membership');playClick()" role="menuitem" data-i18n="nav.applyForMembership">Apply for Membership</a>
+    <a id="navLogin" class="btn btn-ghost btn-sm" onclick="showPage('login');playClick()" role="menuitem" data-i18n="nav.memberLogin">Sign In</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN CONTENT ══════════════════════════ -->
+<main id="mainContent">
+
+<!-- ──────────────── HOME PAGE ──────────────── -->
+<div id="page-home" class="page active">
+
+  <!-- Hero -->
+  <section class="hero" aria-label="Hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="hero-content">
+      <div class="hero-eyebrow">
+        <span class="badge badge-gold" data-i18n="hero.badge">Applications Open — 2025</span>
+      </div>
+      <h1 class="hero-title">
+        <span data-i18n="hero.title1">Where the world's most</span><br>
+        <em data-i18n="hero.title2">distinguished individuals</em><br>
+        <span data-i18n="hero.title3">convene privately.</span>
+      </h1>
+      <p class="hero-subtitle" data-i18n="hero.subtitle">X Club is an invitation-exclusive private membership for verified high-net-worth individuals. Network, invest, bid, and belong — with absolute discretion.</p>
+      <div class="hero-actions">
+        <button class="btn btn-gold btn-lg" onclick="showPage('membership');playClick()" data-i18n="hero.ctaPrimary">Request an Invitation</button>
+        <button class="btn btn-ghost btn-lg" onclick="showPage('membership');playClick()" data-i18n="hero.ctaSecondary">Explore Membership</button>
+      </div>
+      <div class="hero-stats" aria-label="Club statistics">
+        <div class="hero-stat"><div class="hero-stat-num">2,400+</div><div class="hero-stat-label" data-i18n="hero.stat1">Verified Members</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">$4.2B</div><div class="hero-stat-label" data-i18n="hero.stat2">Assets at Auction</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">61</div><div class="hero-stat-label" data-i18n="hero.stat3">Countries Represented</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">100%</div><div class="hero-stat-label" data-i18n="hero.stat4">Identity Verified</div></div>
+      </div>
+    </div>
+    <div class="hero-scroll-cue" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">
+      <span data-i18n="hero.scrollCue">Discover</span> ↓
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="section features-section" aria-labelledby="featuresTitle">
+    <div class="section-inner">
+      <div class="section-eyebrow" data-i18n="features.eyebrow">The Experience</div>
+      <h2 class="section-title" id="featuresTitle" data-i18n="features.title">Everything you'd expect.<br>Nothing you'll find elsewhere.</h2>
+      <p class="section-subtitle" data-i18n="features.subtitle">A curated environment for those who have already succeeded.</p>
+      <div class="features-grid">
+        <div class="feature-card"><div class="feature-icon">🔒</div><h3 data-i18n="features.f1.title">Military-Grade Privacy</h3><p data-i18n="features.f1.desc">End-to-end encrypted communications. Zero third-party data sharing.</p></div>
+        <div class="feature-card"><div class="feature-icon">🤖</div><h3 data-i18n="features.f2.title">AI-Powered Matching</h3><p data-i18n="features.f2.desc">Our algorithm identifies co-investment opportunities and kindred individuals.</p></div>
+        <div class="feature-card"><div class="feature-icon">🏺</div><h3 data-i18n="features.f3.title">Luxury Auctions</h3><p data-i18n="features.f3.desc">Bid on rare art, vintage watches, yacht shares, and private residences.</p></div>
+        <div class="feature-card"><div class="feature-icon">🥂</div><h3 data-i18n="features.f4.title">Private Events</h3><p data-i18n="features.f4.desc">Intimate virtual summits, city dinners, investment roundtables, and cultural experiences.</p></div>
+        <div class="feature-card"><div class="feature-icon">🎩</div><h3 data-i18n="features.f5.title">Personal Concierge</h3><p data-i18n="features.f5.desc">Your concierge handles reservations, travel, and special requests. 24/7.</p></div>
+        <div class="feature-card"><div class="feature-icon">🔐</div><h3 data-i18n="features.f6.title">Deal Rooms</h3><p data-i18n="features.f6.desc">Private encrypted deal rooms. Document vault, e-signature, NDA. (Private Tier.)</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="section testimonials-section" aria-labelledby="testimonialsTitle">
+    <div class="section-inner">
+      <div class="section-eyebrow" data-i18n="testimonials.eyebrow">Members Speak</div>
+      <h2 class="section-title" id="testimonialsTitle" data-i18n="testimonials.title">The highest recommendation<br>is a silent one.</h2>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <p class="testimonial-text" data-i18n="testimonials.t1.text">"The matching algorithm introduced me to two co-investors in my first month. No other network comes close."</p>
+          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t1.name">E. Hoffmann</div><div class="testimonial-role" data-i18n="testimonials.t1.role">Private Equity, Frankfurt — Private Tier</div></div>
+        </div>
+        <div class="testimonial-card">
+          <p class="testimonial-text" data-i18n="testimonials.t2.text">"I'm 74 and not particularly technical. The onboarding team walked me through by phone. I felt welcomed, not overwhelmed."</p>
+          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t2.name">R. Castellanos</div><div class="testimonial-role" data-i18n="testimonials.t2.role">Retired Entrepreneur, Miami — Classic Tier</div></div>
+        </div>
+        <div class="testimonial-card">
+          <p class="testimonial-text" data-i18n="testimonials.t3.text">"I acquired a fractional share of a 52m sailing yacht at auction. The process was seamless. Extraordinary."</p>
+          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t3.name">A. Nkosi</div><div class="testimonial-role" data-i18n="testimonials.t3.role">Tech Founder, London — Private Tier</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Events Teaser -->
+  <section class="section events-teaser-section" aria-labelledby="eventsTeaserTitle">
+    <div class="section-inner">
+      <div class="section-eyebrow" data-i18n="eventsTeaser.eyebrow">Calendar</div>
+      <h2 class="section-title" id="eventsTeaserTitle" data-i18n="eventsTeaser.title">Upcoming Events</h2>
+      <div class="events-teaser-grid">
+        <div class="event-teaser-card">
+          <div class="event-teaser-date">18<span>Jan</span></div>
+          <div class="event-teaser-info">
+            <div class="event-teaser-title" data-i18n="eventsTeaser.e1.title">Global Alternative Assets Roundtable</div>
+            <div><span class="badge badge-gold" data-i18n="eventsTeaser.e1.tier">Private Tier</span></div>
+            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e1.format">Virtual — Encrypted</span> · <span data-i18n="eventsTeaser.e1.time">15:00 CET</span> · <span data-i18n="eventsTeaser.e1.capacity">24 seats</span></div>
+          </div>
+        </div>
+        <div class="event-teaser-card">
+          <div class="event-teaser-date">24<span>Jan</span></div>
+          <div class="event-teaser-info">
+            <div class="event-teaser-title" data-i18n="eventsTeaser.e2.title">Members' Dinner — Monaco</div>
+            <div><span class="badge badge-silver" data-i18n="eventsTeaser.e2.tier">All Members</span></div>
+            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e2.location">Hôtel de Paris, Monte-Carlo</span> · <span data-i18n="eventsTeaser.e2.time">20:00 CET</span> · <span data-i18n="eventsTeaser.e2.capacity">6 seats</span></div>
+          </div>
+        </div>
+        <div class="event-teaser-card">
+          <div class="event-teaser-date">31<span>Jan</span></div>
+          <div class="event-teaser-info">
+            <div class="event-teaser-title" data-i18n="eventsTeaser.e3.title">Art Acquisition Masterclass</div>
+            <div><span class="badge badge-silver" data-i18n="eventsTeaser.e3.tier">All Members</span></div>
+            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e3.format">Virtual — Encrypted</span> · <span data-i18n="eventsTeaser.e3.time">17:00 GMT</span> · <span data-i18n="eventsTeaser.e3.capacity">60 seats</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:2rem">
+        <button class="btn btn-ghost" onclick="showPage('events');playClick()" data-i18n="eventsTeaser.viewAll">View All Events</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacy Section -->
+  <section class="section privacy-section" aria-labelledby="privacyTitle">
+    <div class="section-inner">
+      <div class="section-eyebrow" data-i18n="privacy.eyebrow">Discretion First</div>
+      <h2 class="section-title" id="privacyTitle" data-i18n="privacy.title">Your privacy is not a feature.<br>It is the foundation.</h2>
+      <p class="section-subtitle" data-i18n="privacy.desc">X Club enforces a strict non-disclosure policy. AI moderation scans every message in real time.</p>
+      <div class="privacy-grid">
+        <div class="privacy-card"><div class="privacy-icon">🔑</div><h3 data-i18n="privacy.p1.title">End-to-End Encryption</h3><p data-i18n="privacy.p1.desc">All messages and documents are encrypted in transit and at rest.</p></div>
+        <div class="privacy-card"><div class="privacy-icon">🤖</div><h3 data-i18n="privacy.p2.title">AI Safety Moderation</h3><p data-i18n="privacy.p2.desc">Our AI intercepts attempts to share phone numbers or emails.</p></div>
+        <div class="privacy-card"><div class="privacy-icon">🛡️</div><h3 data-i18n="privacy.p3.title">Zero Data Sharing</h3><p data-i18n="privacy.p3.desc">X Club never sells or shares member data with third parties.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="section cta-section" aria-labelledby="ctaTitle">
+    <div class="section-inner" style="text-align:center">
+      <h2 class="section-title" id="ctaTitle" data-i18n="cta.title">Ready to apply?</h2>
+      <p class="section-subtitle" data-i18n="cta.desc">Membership by application only. We respond within 5 business days.</p>
+      <button class="btn btn-gold btn-lg" onclick="showPage('membership');playClick()" data-i18n="cta.btn">Begin Application</button>
+    </div>
+  </section>
+
+</div><!-- /page-home -->
+
+<!-- ──────────────── MEMBERSHIP PAGE ──────────────── -->
+<div id="page-membership" class="page">
+  <div class="page-hero">
+    <div class="section-eyebrow" data-i18n="mem.eyebrow">Join X Club</div>
+    <h1 class="page-title" data-i18n="mem.title">Choose Your Tier</h1>
+    <p class="page-subtitle" data-i18n="mem.subtitle">Each tier grants increasing levels of access, privacy, and service.</p>
+  </div>
+  <div class="section-inner">
+    <div class="membership-tiers">
+      <!-- Classic -->
+      <div class="tier-card">
+        <div class="tier-name" data-i18n="mem.classic.name">Classic</div>
+        <div class="tier-price"><span class="tier-price-amt">€2,400</span><span class="tier-price-period" data-i18n="mem.perYear">/year</span></div>
+        <ul class="tier-features">
+          <li data-i18n="mem.classic.f1">Member directory access</li>
+          <li data-i18n="mem.classic.f2">Auction participation</li>
+          <li data-i18n="mem.classic.f3">Virtual events</li>
+          <li data-i18n="mem.classic.f4">Encrypted messaging</li>
+          <li data-i18n="mem.classic.f5">AI matching — basic</li>
+        </ul>
+        <button class="btn btn-ghost btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.apply">Apply Now</button>
+      </div>
+      <!-- Premier -->
+      <div class="tier-card tier-featured">
+        <div class="tier-badge" data-i18n="mem.popular">Most Popular</div>
+        <div class="tier-name" data-i18n="mem.premier.name">Premier</div>
+        <div class="tier-price"><span class="tier-price-amt">€8,500</span><span class="tier-price-period" data-i18n="mem.perYear">/year</span></div>
+        <ul class="tier-features">
+          <li data-i18n="mem.premier.f1">Everything in Classic</li>
+          <li data-i18n="mem.premier.f2">In-person events &amp; dinners</li>
+          <li data-i18n="mem.premier.f3">Personal concierge</li>
+          <li data-i18n="mem.premier.f4">AI matching — advanced</li>
+          <li data-i18n="mem.premier.f5">Priority auction access</li>
+        </ul>
+        <button class="btn btn-gold btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.apply">Apply Now</button>
+      </div>
+      <!-- Private -->
+      <div class="tier-card">
+        <div class="tier-name" data-i18n="mem.private.name">Private</div>
+        <div class="tier-price"><span class="tier-price-amt" data-i18n="mem.private.price">By invitation</span></div>
+        <ul class="tier-features">
+          <li data-i18n="mem.private.f1">Everything in Premier</li>
+          <li data-i18n="mem.private.f2">Encrypted deal rooms</li>
+          <li data-i18n="mem.private.f3">Document vault &amp; e-sign</li>
+          <li data-i18n="mem.private.f4">Dedicated relationship manager</li>
+          <li data-i18n="mem.private.f5">Sovereign &amp; family office network</li>
+        </ul>
+        <button class="btn btn-ghost btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.inquire">Inquire</button>
+      </div>
+    </div>
+
+    <!-- Application Form -->
+    <div id="applicationForm" class="application-form-wrap">
+      <h2 class="section-title" style="margin-bottom:2rem" data-i18n="mem.form.title">Begin Your Application</h2>
+      <div class="application-form">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" data-i18n="mem.form.firstName">First Name</label><input type="text" id="appFirstName" autocomplete="given-name"></div>
+          <div class="form-group"><label class="form-label" data-i18n="mem.form.lastName">Last Name</label><input type="text" id="appLastName" autocomplete="family-name"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="mem.form.tier">Membership Tier</label>
+          <select id="appTier" class="form-select">
+            <option value="classic" data-i18n="mem.classic.name">Classic</option>
+            <option value="premier" selected data-i18n="mem.premier.name">Premier</option>
+            <option value="private" data-i18n="mem.private.name">Private</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label" data-i18n="mem.form.country">Country of Residence</label><input type="text" id="appCountry" autocomplete="country-name"></div>
+        <button class="btn btn-gold btn-block" onclick="advanceOnboarding()" data-i18n="mem.form.submit">Submit Application</button>
+        <p class="modal-note" style="margin-top:1rem" data-i18n="mem.form.note">All applications are reviewed within 5 business days. Strict confidentiality guaranteed.</p>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-membership -->
+
+<!-- ──────────────── AUCTIONS PAGE ──────────────── -->
+<div id="page-auctions" class="page">
+  <div class="page-hero">
+    <div class="section-eyebrow" data-i18n="auction.eyebrow">Live Bidding</div>
+    <h1 class="page-title" data-i18n="auction.title">Private Auctions</h1>
+    <p class="page-subtitle" data-i18n="auction.subtitle">Rare assets. Verified sellers. Absolute discretion.</p>
+  </div>
+  <div class="section-inner">
+    <div class="auction-filters">
+      <button class="auction-filter-btn active" onclick="filterAuctions('all',this)" data-i18n="auction.filter.all">All</button>
+      <button class="auction-filter-btn" onclick="filterAuctions('art',this)" data-i18n="auction.filter.art">Art</button>
+      <button class="auction-filter-btn" onclick="filterAuctions('watch',this)" data-i18n="auction.filter.watches">Watches</button>
+      <button class="auction-filter-btn" onclick="filterAuctions('yacht',this)" data-i18n="auction.filter.yachts">Yachts</button>
+      <button class="auction-filter-btn" onclick="filterAuctions('estate',this)" data-i18n="auction.filter.estates">Estates</button>
+    </div>
+    <div class="auction-grid" id="auctionGrid"></div>
+  </div>
+</div><!-- /page-auctions -->
+
+<!-- ──────────────── EVENTS PAGE ──────────────── -->
+<div id="page-events" class="page">
+  <div class="page-hero">
+    <div class="section-eyebrow" data-i18n="events.eyebrow">Exclusive Calendar</div>
+    <h1 class="page-title" data-i18n="events.title">Private Events</h1>
+    <p class="page-subtitle" data-i18n="events.subtitle">Summits, dinners, masterclasses, and roundtables — by invitation.</p>
+  </div>
+  <div class="section-inner">
+    <div class="events-layout">
+      <div class="events-list" id="eventsList"></div>
+      <div class="events-calendar">
+        <div class="mini-cal-header">
+          <button class="btn btn-ghost btn-sm" onclick="changeMonth(-1)">&#8249;</button>
+          <div id="calMonthTitle" style="font-family:var(--font-display);font-size:1rem;color:var(--gold)"></div>
+          <button class="btn btn-ghost btn-sm" onclick="changeMonth(1)">&#8250;</button>
+        </div>
+        <div class="mini-cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-events -->
+
+<!-- ──────────────── DASHBOARD PAGE ──────────────── -->
+<div id="page-dashboard" class="page">
+  <div class="dashboard-layout">
+
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" role="complementary" aria-label="Member sidebar">
+      <div class="sidebar-profile">
+        <div class="sidebar-avatar" id="sidebarAvatar">👤</div>
+        <div class="sidebar-name" id="sidebarName">Member</div>
+        <div class="sidebar-tier"><span class="badge badge-gold">Premier</span></div>
+      </div>
+      <nav class="sidebar-nav" aria-label="Dashboard navigation">
+        <a class="sidebar-link active" onclick="showDashView('overview',this);playClick()" data-i18n="dash.overview">Overview</a>
+        <a class="sidebar-link" onclick="showDashView('network',this);playClick()" data-i18n="dash.network">Network</a>
+        <a class="sidebar-link" onclick="showDashView('dealrooms',this);playClick()" data-i18n="dash.dealrooms">Deal Rooms</a>
+        <a class="sidebar-link" onclick="showDashView('vault',this);playClick()" data-i18n="dash.vault">Vault</a>
+        <a class="sidebar-link" onclick="showDashView('matching',this);playClick()" data-i18n="dash.matching">Matching</a>
+        <a class="sidebar-link" onclick="showDashView('settings',this);playClick()" data-i18n="dash.settings">Settings</a>
+        <a class="sidebar-link" onclick="handleLogout();playClick()" style="color:var(--silver-dim);margin-top:auto" data-i18n="dash.logout">Sign Out</a>
+      </nav>
+    </aside>
+
+    <!-- Main dashboard area -->
+    <div class="dashboard-main">
+
+      <!-- Overview -->
+      <div id="dash-view-overview">
+        <h2 class="dash-greeting" id="dashGreeting">Good evening, Member.</h2>
+        <div class="dash-stats-row">
+          <div class="dash-stat-card"><div class="dash-stat-val" id="notifBadge" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">3</div><div class="dash-stat-label" data-i18n="dash.notifications">Notifications</div></div>
+          <div class="dash-stat-card"><div class="dash-stat-val" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">2</div><div class="dash-stat-label" data-i18n="dash.activeBids">Active Bids</div></div>
+          <div class="dash-stat-card"><div class="dash-stat-val" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">5</div><div class="dash-stat-label" data-i18n="dash.newMatches">New Matches</div></div>
+        </div>
+        <div class="dash-grid">
+          <div class="dash-card">
+            <div class="dash-card-title" data-i18n="dash.activity">Recent Activity</div>
+            <div id="activityFeed"></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title" data-i18n="dash.topMatches">Top Matches</div>
+            <div id="matchesList"></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title" data-i18n="dash.activeBidsTitle">Active Bids</div>
+            <div id="activeBidsList"></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:1rem;width:100%" onclick="showPage('auctions');playClick()" data-i18n="dash.viewAuctions">View All Auctions</button>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title" data-i18n="dash.profilePhoto">Profile Photo</div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+              <img id="photoPreview" src="" alt="Profile photo preview" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;border:2px solid rgba(212,175,55,.3)">
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                <span data-i18n="dash.uploadPhoto">Upload Photo</span>
+                <input type="file" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">
+              </label>
+              <div id="uploadProgress" style="display:none;width:100%">
+                <div style="background:rgba(212,175,55,.1);border-radius:4px;height:4px;overflow:hidden">
+                  <div id="uploadProgressBar" style="height:100%;background:var(--gold);width:0%;transition:width .2s"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div id="dash-view-network" style="display:none">
+        <h2 class="dash-section-title" data-i18n="dash.network">Network</h2>
+        <div class="dash-card">
+          <div class="dash-card-title" data-i18n="dash.memberDirectory">Member Directory</div>
+          <p style="color:var(--silver-dim);font-size:.85rem" data-i18n="dash.networkDesc">Your AI-matched network appears here. Profiles are anonymised until mutual connection.</p>
+        </div>
+      </div>
+
+      <!-- Deal Rooms -->
+      <div id="dash-view-dealrooms" style="display:none">
+        <h2 class="dash-section-title" data-i18n="dash.dealrooms">Deal Rooms</h2>
+        <div class="dash-card" style="text-align:center;padding:3rem">
+          <div style="font-size:3rem;margin-bottom:1rem">🔐</div>
+          <p data-i18n="dash.dealroomsPrivate">Deal rooms are available for Private Tier members.</p>
+          <button class="btn btn-gold" style="margin-top:1.5rem" onclick="showPage('membership');playClick()" data-i18n="dash.upgrade">Upgrade to Private</button>
+        </div>
+      </div>
+
+      <!-- Vault -->
+      <div id="dash-view-vault" style="display:none">
+        <h2 class="dash-section-title" data-i18n="dash.vault">Document Vault</h2>
+        <div class="dash-card" style="text-align:center;padding:3rem">
+          <div style="font-size:3rem;margin-bottom:1rem">🗄️</div>
+          <p data-i18n="dash.vaultPrivate">The document vault is available for Private Tier members.</p>
+          <button class="btn btn-gold" style="margin-top:1.5rem" onclick="showPage('membership');playClick()" data-i18n="dash.upgrade">Upgrade to Private</button>
+        </div>
+      </div>
+
+      <!-- Matching -->
+      <div id="dash-view-matching" style="display:none">
+        <h2 class="dash-section-title" data-i18n="dash.matching">AI Matching</h2>
+        <div class="dash-card">
+          <div class="dash-card-title" data-i18n="dash.topMatches">Top Matches</div>
+          <div id="matchesList3"></div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="dash-view-settings" style="display:none">
+        <h2 class="dash-section-title" data-i18n="dash.settings">Settings</h2>
+        <div class="dash-card">
+          <div class="dash-card-title" data-i18n="dash.account">Account</div>
+          <div style="display:flex;flex-direction:column;gap:1rem">
+            <button class="btn btn-ghost" onclick="playClick()" data-i18n="dash.changePassword">Change Password</button>
+            <button class="btn btn-ghost" onclick="playClick()" data-i18n="dash.notificationPrefs">Notification Preferences</button>
+            <button class="btn btn-ghost" style="color:var(--danger)" onclick="handleLogout();playClick()" data-i18n="dash.logout">Sign Out</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /dashboard-main -->
+  </div><!-- /dashboard-layout -->
+</div><!-- /page-dashboard -->
+
+<!-- ──────────────── MESSAGES PAGE ──────────────── -->
+<div id="page-messages" class="page">
+  <div class="messages-layout">
+    <div class="message-list" role="list" aria-label="Conversations">
+      <div class="message-list-header" data-i18n="messages.title">Messages</div>
+      <div id="messageListItems"></div>
+    </div>
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="chat-name" id="chatName">E. Hoffmann</div>
+        <button class="btn btn-ghost btn-sm" onclick="showCuratorModal();playClick()" data-i18n="messages.curator">Contact Curator</button>
+      </div>
+      <div class="chat-area" id="chatArea" role="log" aria-live="polite"></div>
+      <div class="chat-input-row">
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…" onkeydown="handleChatKey(event)"></textarea>
+        <button class="btn btn-gold btn-sm" onclick="sendMessage();playClick()" data-i18n="messages.send">Send</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-messages -->
+
+<!-- ──────────────── CONCIERGE PAGE ──────────────── -->
+<div id="page-concierge" class="page">
+  <div class="page-hero">
+    <div class="section-eyebrow" data-i18n="concierge.eyebrow">24/7 Service</div>
+    <h1 class="page-title" data-i18n="concierge.title">Your Personal Concierge</h1>
+    <p class="page-subtitle" data-i18n="concierge.subtitle">Whatever you need. Wherever you are.</p>
+  </div>
+  <div class="section-inner">
+    <div class="concierge-layout">
+      <div class="dash-card">
+        <div class="dash-card-title" data-i18n="concierge.form.category">Select a Category</div>
+        <div class="concierge-categories" id="conciergeCategories"></div>
+        <div class="form-group" style="margin-top:1.5rem">
+          <label class="form-label" data-i18n="concierge.form.request">Your Request</label>
+          <textarea id="concRequest" rows="4" style="width:100%;background:var(--navy-light);border:1px solid rgba(212,175,55,.15);border-radius:var(--r-sm);padding:.75rem;color:var(--white);font-family:var(--font-body);resize:vertical" placeholder="Describe your request in detail…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="concierge.form.urgency">Urgency</label>
+          <select id="concUrgency" class="form-select">
+            <option value="standard" data-i18n="concierge.form.standard">Standard (24–48h)</option>
+            <option value="priority" data-i18n="concierge.form.priority">Priority (4–8h)</option>
+            <option value="emergency" data-i18n="concierge.form.emergency">Emergency (1h)</option>
+          </select>
+        </div>
+        <button class="btn btn-gold btn-block" onclick="submitConcierge()" data-i18n="concierge.form.submit">Submit Request</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-concierge -->
+
+<!-- ──────────────── LOGIN PAGE ──────────────── -->
+<div id="page-login" class="page">
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">X<span>·</span>Club</div>
+      <h2 class="auth-title" data-i18n="auth.login.title">Welcome back</h2>
       <p class="auth-sub" data-i18n="auth.login.sub">Sign in to your X Club account</p>
       <div class="auth-form">
         <div class="form-group"><label class="form-label" for="loginEmail" data-i18n="auth.login.email">Email</label><input type="email" id="loginEmail" autocomplete="email"></div>
@@ -11,7 +495,7 @@
       <div class="auth-switch"><span data-i18n="auth.login.noAccount">Not a member yet?</span> <a onclick="showPage('register');playClick()" data-i18n="auth.login.apply">Apply</a></div>
     </div>
   </div>
-</div>
+</div><!-- /page-login -->
 
 <!-- ──────────────── REGISTER PAGE ──────────────── -->
 <div id="page-register" class="page">
@@ -31,7 +515,7 @@
       <div class="auth-switch"><span data-i18n="auth.register.have">Already a member?</span> <a onclick="showPage('login');playClick()" data-i18n="auth.register.signin">Sign In</a></div>
     </div>
   </div>
-</div>
+</div><!-- /page-register -->
 
 <!-- ──────────────── RESET PASSWORD PAGE ──────────────── -->
 <div id="page-reset" class="page">
@@ -47,7 +531,7 @@
       </div>
     </div>
   </div>
-</div>
+</div><!-- /page-reset -->
 
 </main><!-- /main-content -->
 
