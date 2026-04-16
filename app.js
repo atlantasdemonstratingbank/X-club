@@ -543,7 +543,7 @@ function onAuthStateChange(user) {
   if (user) {
     /* Signed in */
     updateNavForUser(user);
-    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.style.display = 'none', 500); }
+    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.remove(), 400); }
 
     /* Subscribe to notifications */
     if (_notifUnsubscribe) _notifUnsubscribe();
@@ -566,7 +566,7 @@ function onAuthStateChange(user) {
   } else {
     /* Not signed in */
     updateNavForGuest();
-    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.style.display = 'none', 500); }
+    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.remove(), 400); }
     const urlPage = new URLSearchParams(location.search).get('page');
     if (urlPage && ['login','register','home','membership'].includes(urlPage)) showPage(urlPage);
     else showPage('home');
@@ -1266,7 +1266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loader && loader.style.display !== 'none' && !loader.classList.contains('hidden')) {
       console.warn('[XClub] Loader timeout — forcing home page');
       loader.classList.add('hidden');
-      setTimeout(() => loader.style.display = 'none', 500);
+      setTimeout(() => loader.remove(), 400);
       updateNavForGuest();
       showPage('home');
       applyT(); renderAll();
@@ -1284,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(_loaderTimeout);
     console.error('[XClub] Firebase failed to load:', err);
     const loader = document.getElementById('appLoader');
-    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.style.display='none', 500); }
+    if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.remove(), 400); }
     showPage('home');
     applyT(); renderAll(); initParticles();
   }
