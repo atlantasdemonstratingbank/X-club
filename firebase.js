@@ -1,4 +1,4 @@
-/* firebase.js — X Club v3 */
+/* firebase.js — X Club v4 */
 'use strict';
 
 const FIREBASE_CONFIG = {
@@ -25,23 +25,33 @@ async function loadFirebase() {
     db:   _db,
 
     /* ── Auth ── */
-    onAuth:      (cb)          => _auth.onAuthStateChanged(cb),
-    signIn:      (e, p)        => _auth.signInWithEmailAndPassword(e, p),
-    signUp:      (e, p)        => _auth.createUserWithEmailAndPassword(e, p),
-    signOut:     ()            => _auth.signOut(),
-    resetPw:     (e)           => _auth.sendPasswordResetEmail(e),
-    googleAuth:  ()            => _auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()),
-    updateProfile: (data)      => _auth.currentUser.updateProfile(data),
-    currentUser: ()            => _auth.currentUser,
+    onAuth:        (cb)       => _auth.onAuthStateChanged(cb),
+    signIn:        (e, p)     => _auth.signInWithEmailAndPassword(e, p),
+    signUp:        (e, p)     => _auth.createUserWithEmailAndPassword(e, p),
+    signOut:       ()         => _auth.signOut(),
+    resetPw:       (e)        => _auth.sendPasswordResetEmail(e),
+    googleAuth:    ()         => _auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()),
+    updateProfile: (data)     => _auth.currentUser.updateProfile(data),
+    currentUser:   ()         => _auth.currentUser,
 
     /* ── DB helpers ── */
-    set:    (path, val)        => _db.ref(path).set(val),
-    update: (path, val)        => _db.ref(path).update(val),
-    push:   (path, val)        => _db.ref(path).push(val),
-    get:    (path)             => _db.ref(path).once('value'),
-    remove: (path)             => _db.ref(path).remove(),
-    on:     (path, cb)         => { _db.ref(path).on('value', cb); return () => _db.ref(path).off('value', cb); },
-    ts:     ()                 => firebase.database.ServerValue.TIMESTAMP,
+    set:    (path, val)       => _db.ref(path).set(val),
+    update: (path, val)       => _db.ref(path).update(val),
+    push:   (path, val)       => _db.ref(path).push(val),
+    get:    (path)            => _db.ref(path).once('value'),
+    remove: (path)            => _db.ref(path).remove(),
+    on:     (path, cb)        => { _db.ref(path).on('value', cb); return () => _db.ref(path).off('value', cb); },
+    ts:     ()                => firebase.database.ServerValue.TIMESTAMP,
+
+    /* ── Online presence ── */
+    setOnline: (uid, state) => {
+      if (!uid) return;
+      _db.ref(`online/${uid}`).set(state ? true : null);
+      // Use Firebase .onDisconnect to auto-remove on drop
+      if (state) {
+        _db.ref(`online/${uid}`).onDisconnect().remove();
+      }
+    },
   };
 }
 

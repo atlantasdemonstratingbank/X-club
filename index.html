@@ -5,15 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#000000">
   <meta name="description" content="X Club — The premium business social network">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="X Club">
   <title>X Club</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
 
 <!-- ═══════════════════ LOADER ═══════════════════ -->
 <div id="appLoader">
-  <div class="loader-logo">✕</div>
+  <div class="loader-logo">
+    <svg class="loader-logo-svg" width="48" height="48" viewBox="0 0 32 32" fill="white">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+    <div class="loader-wordmark">X CLUB</div>
+  </div>
 </div>
 
 <!-- ═══════════════════ TOAST ═══════════════════ -->
@@ -24,30 +33,39 @@
 
   <!-- LEFT NAV -->
   <nav class="left-nav">
-    <div class="nav-logo" onclick="showPage('feed')">✕</div>
+    <div class="nav-logo" onclick="showPage('feed')">
+      <svg class="nav-logo-svg" width="28" height="28" viewBox="0 0 32 32" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+      <span class="nav-logo-text">X CLUB</span>
+    </div>
     <div class="nav-links">
       <div class="nav-link" data-page="feed" onclick="showPage('feed')">
-        <span class="nav-icon">🏠</span><span>Home</span>
+        <span class="nav-icon" id="iconHome"></span><span>Home</span>
       </div>
       <div class="nav-link" data-page="discover" onclick="showPage('discover')">
-        <span class="nav-icon">🔍</span><span>Discover</span>
+        <span class="nav-icon" id="iconDiscover"></span><span>Discover</span>
       </div>
       <div class="nav-link" data-page="notifications" onclick="showPage('notifications')">
-        <span class="nav-icon">🔔</span><span>Notifications</span>
+        <span class="nav-icon" id="iconBell"></span><span>Notifications</span>
         <span class="nav-badge" id="navNotifBadge" style="display:none">0</span>
       </div>
       <div class="nav-link" data-page="messages" onclick="showPage('messages')">
-        <span class="nav-icon">✉️</span><span>Messages</span>
+        <span class="nav-icon" id="iconMail"></span><span>Messages</span>
+        <span class="nav-badge" id="navMsgBadge" style="display:none;background:var(--accent)">·</span>
       </div>
       <div class="nav-link" data-page="profile" onclick="showPage('profile')">
-        <span class="nav-icon">👤</span><span>Profile</span>
+        <span class="nav-icon" id="iconUser"></span><span>Profile</span>
+      </div>
+      <div class="nav-link" data-page="admin" id="navAdminLink" onclick="showPage('admin')" style="display:none;color:var(--admin)">
+        <span class="nav-icon" id="iconAdmin"></span><span>Admin</span>
       </div>
     </div>
 
     <button class="nav-post-btn" onclick="openPostModal()"><span>Post</span></button>
 
     <div class="nav-user" id="navUserWrap" style="display:none" onclick="showPage('profile')">
-      <div class="avatar avatar-md" id="navUserAvatar"></div>
+      <div id="navUserAvatar"><div class="avatar avatar-md"></div></div>
       <div class="nav-user-info">
         <div class="nav-user-name" id="navUserName"></div>
         <div class="nav-user-handle" id="navUserHandle"></div>
@@ -61,19 +79,26 @@
 
     <!-- ── LANDING PAGE ── -->
     <div class="page active" id="page-landing">
-      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;">
-        <div style="max-width:420px;width:100%;text-align:center">
-          <div style="font-size:4rem;font-weight:900;margin-bottom:32px;letter-spacing:-0.04em">✕</div>
-          <h1 style="font-size:2.5rem;font-weight:900;margin-bottom:16px;letter-spacing:-0.02em">Happening now</h1>
-          <p style="color:var(--text-dim);font-size:1.1rem;margin-bottom:40px;line-height:1.5">The premium business social network. Build real connections. Verified members only.</p>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <button class="btn btn-primary btn-lg btn-block" onclick="showPage('register')">Create account</button>
-            <div style="color:var(--text-dim);font-size:0.85rem">Already have an account?</div>
-            <button class="btn btn-outline btn-lg btn-block" onclick="showPage('login')">Sign in</button>
+      <div class="landing-root">
+        <div class="landing-left">
+          <div class="landing-hero-logo">
+            <svg class="landing-hero-x" width="120" height="120" viewBox="0 0 32 32" fill="white">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <div class="landing-hero-club">CLUB</div>
           </div>
-          <p style="margin-top:32px;color:var(--text-muted);font-size:0.78rem;line-height:1.5">
-            By signing up you agree to the Terms of Service and Privacy Policy.
-          </p>
+        </div>
+        <div class="landing-right">
+          <div class="landing-form-wrap">
+            <div class="landing-tagline">Happening now.</div>
+            <p class="landing-sub">The premium business social network. Build real connections. Verified members only.</p>
+            <div class="landing-actions">
+              <button class="btn btn-primary btn-lg btn-block" onclick="showPage('register')">Create account</button>
+              <div class="landing-divider">or</div>
+              <button class="btn btn-outline btn-lg btn-block" onclick="showPage('login')">Sign in</button>
+            </div>
+            <p class="landing-footer">By signing up you agree to the Terms of Service and Privacy Policy.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -82,7 +107,11 @@
     <div class="page" id="page-login">
       <div class="auth-page">
         <div class="auth-card">
-          <div class="auth-logo">✕</div>
+          <div class="auth-logo">
+            <svg width="36" height="36" viewBox="0 0 32 32" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </div>
           <div class="auth-title">Sign in to X Club</div>
           <form onsubmit="handleLogin(event)">
             <div class="form-group">
@@ -100,12 +129,8 @@
             <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
             Continue with Google
           </button>
-          <div class="auth-footer">
-            Don't have an account? <a onclick="showPage('register')">Sign up</a>
-          </div>
-          <div class="auth-footer" style="margin-top:8px">
-            <a onclick="showPage('reset')" style="color:var(--text-dim)">Forgot password?</a>
-          </div>
+          <div class="auth-footer">Don't have an account? <a onclick="showPage('register')">Sign up</a></div>
+          <div class="auth-footer" style="margin-top:8px"><a onclick="showPage('reset')" style="color:var(--text-dim)">Forgot password?</a></div>
         </div>
       </div>
     </div>
@@ -114,7 +139,11 @@
     <div class="page" id="page-register">
       <div class="auth-page">
         <div class="auth-card">
-          <div class="auth-logo">✕</div>
+          <div class="auth-logo">
+            <svg width="36" height="36" viewBox="0 0 32 32" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </div>
           <div class="auth-title">Join X Club</div>
           <div class="auth-sub">Create your account — free to join, verify to unlock everything</div>
           <form onsubmit="handleRegister(event)">
@@ -141,12 +170,10 @@
           </form>
           <div class="divider">or</div>
           <button class="btn-google" onclick="handleGoogleAuth()">
-            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
             Continue with Google
           </button>
-          <div class="auth-footer">
-            Already a member? <a onclick="showPage('login')">Sign in</a>
-          </div>
+          <div class="auth-footer">Already a member? <a onclick="showPage('login')">Sign in</a></div>
         </div>
       </div>
     </div>
@@ -155,7 +182,11 @@
     <div class="page" id="page-reset">
       <div class="auth-page">
         <div class="auth-card">
-          <div class="auth-logo">✕</div>
+          <div class="auth-logo">
+            <svg width="36" height="36" viewBox="0 0 32 32" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.737l7.73-8.835L2.25 2.25h6.946l4.261 5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </div>
           <div class="auth-title">Reset password</div>
           <div class="auth-sub">Enter your email and we'll send you a reset link</div>
           <div class="form-group">
@@ -163,9 +194,7 @@
             <input id="resetEmail" class="form-input" type="email" placeholder="you@example.com">
           </div>
           <button class="btn btn-primary btn-block" onclick="sendReset()">Send reset link</button>
-          <div class="auth-footer" style="margin-top:16px">
-            <a onclick="showPage('login')">← Back to sign in</a>
-          </div>
+          <div class="auth-footer" style="margin-top:16px"><a onclick="showPage('login')">← Back to sign in</a></div>
         </div>
       </div>
     </div>
@@ -174,23 +203,21 @@
     <div class="page" id="page-feed">
       <div class="feed-tabs">
         <div class="feed-tab active" onclick="switchFeedTab('for-you', this)">For you</div>
-        <div class="feed-tab" onclick="switchFeedTab('following', this)">Following</div>
+        <div class="feed-tab" onclick="switchFeedTab('verified', this)">Verified only</div>
       </div>
 
       <!-- Composer -->
       <div class="composer" id="feedComposer">
-        <div id="composerAvatar"></div>
+        <div id="composerAvatarWrap"></div>
         <div class="composer-body">
           <textarea id="postText" placeholder="What's happening?" rows="3" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
 
-          <!-- Event toggle -->
           <div style="display:flex;gap:8px;margin-bottom:8px">
-            <button id="postTypePost" class="btn btn-outline btn-sm active" onclick="togglePostType('post')" style="font-size:0.78rem">📝 Post</button>
-            <button id="postTypeEvent" class="btn btn-outline btn-sm" onclick="togglePostType('event')" style="font-size:0.78rem">📅 Event</button>
+            <button id="postTypePost" class="btn btn-outline btn-sm active" onclick="togglePostType('post')" style="font-size:0.78rem">Post</button>
+            <button id="postTypeEvent" class="btn btn-outline btn-sm" onclick="togglePostType('event')" style="font-size:0.78rem">Event</button>
           </div>
 
-          <!-- Event fields -->
-          <div id="eventFields" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;display:none">
+          <div id="eventFields" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
             <div class="form-group" style="margin-bottom:10px">
               <input id="eventTitle" class="form-input" placeholder="Event title" style="font-size:0.88rem">
             </div>
@@ -207,10 +234,8 @@
           </div>
 
           <div id="postImagePreview"></div>
-
           <div class="composer-actions">
-            <label class="composer-tool" title="Add image">
-              📷
+            <label class="composer-tool" title="Add image" id="cameraIconWrap">
               <input id="postImageInput" type="file" accept="image/*" style="display:none" onchange="previewPostImage(this)">
             </label>
             <button id="postSubmitBtn" class="composer-submit" onclick="submitPost()">Post</button>
@@ -223,12 +248,10 @@
 
     <!-- ── DISCOVER ── -->
     <div class="page" id="page-discover">
-      <div class="page-header">
-        <h1>Discover</h1>
-      </div>
+      <div class="page-header"><h1>Discover</h1></div>
       <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
-        <input class="form-input" type="text" placeholder="Search members" oninput="searchUsers(this.value)" style="border-radius:9999px;background:var(--bg-3)">
-        <div id="searchResults"></div>
+        <input class="form-input" type="text" placeholder="Search members" oninput="searchUsers(this.value,'discoverSearch')" style="border-radius:9999px;background:var(--bg-3)">
+        <div id="discoverSearch"></div>
       </div>
       <div class="page-header" style="position:static;border-bottom:none;padding-bottom:0">
         <div>
@@ -254,7 +277,7 @@
         </div>
         <div class="chat-area" id="chatArea">
           <div class="empty-state" style="margin:auto">
-            <div class="empty-state-icon">💬</div>
+            <div class="empty-state-icon" id="emptyMailIcon"></div>
             <div class="empty-state-title">Your messages</div>
             <div class="empty-state-desc">Select a conversation to start chatting</div>
           </div>
@@ -274,40 +297,45 @@
     <!-- ── USER PROFILE ── -->
     <div class="page" id="page-user-profile">
       <div class="page-header">
-        <div class="pointer" onclick="history.back()" style="font-size:1.2rem">←</div>
-        <div>
-          <h1>Profile</h1>
-        </div>
+        <div class="pointer" onclick="showPage(prevPage||'feed')" style="font-size:1.4rem;line-height:1">←</div>
+        <div><h1>Profile</h1></div>
       </div>
       <div id="userProfileContent"></div>
     </div>
 
-  </main><!-- /main-content -->
+    <!-- ── ADMIN PANEL ── -->
+    <div class="page" id="page-admin">
+      <div class="page-header">
+        <h1 style="color:var(--admin)">Admin</h1>
+        <button class="btn btn-outline btn-sm" onclick="showPage('feed')" style="margin-left:auto">Back to feed</button>
+      </div>
+      <div id="adminContent"></div>
+    </div>
+
+  </main>
 
   <!-- RIGHT SIDEBAR -->
   <aside class="right-sidebar">
     <div class="search-bar">
       <div class="search-input-wrap">
-        <span class="search-icon">🔍</span>
-        <input class="search-input" type="text" placeholder="Search X Club" oninput="searchUsers(this.value)">
+        <span class="search-icon" id="sidebarSearchIcon"></span>
+        <input class="search-input" type="text" placeholder="Search X Club" oninput="searchUsers(this.value,'sidebarSearchResults')">
       </div>
-      <div id="searchResults" style="margin-top:8px"></div>
+      <div id="sidebarSearchResults" style="margin-top:8px"></div>
     </div>
-
     <div class="sidebar-section">
       <div class="sidebar-section-title">Suggested members</div>
       <div id="suggestedMembers">
         <div class="loading-center"><div class="spinner"></div></div>
       </div>
     </div>
-
     <div class="sidebar-section">
       <div class="sidebar-section-title">About X Club</div>
       <p style="font-size:0.83rem;color:var(--text-dim);line-height:1.5">
         The premium business social network. Verified members get full access to posts, events, messaging and deal rooms.
       </p>
       <div style="margin-top:12px">
-        <button class="btn btn-accent btn-sm" onclick="showPaywall()">Get Verified ✓</button>
+        <button class="btn btn-accent btn-sm" onclick="showPaywall()">Get Verified</button>
       </div>
     </div>
   </aside>
@@ -318,20 +346,24 @@
 <nav class="mobile-nav">
   <div class="mobile-nav-links">
     <div class="mobile-nav-link" data-page="feed" onclick="showPage('feed')">
-      <span class="mnav-icon">🏠</span><span>Home</span>
+      <span id="mIconHome"></span><span>Home</span>
     </div>
     <div class="mobile-nav-link" data-page="discover" onclick="showPage('discover')">
-      <span class="mnav-icon">🔍</span><span>Discover</span>
+      <span id="mIconDiscover"></span><span>Discover</span>
     </div>
     <div class="mobile-nav-link" data-page="notifications" onclick="showPage('notifications')">
-      <span class="mnav-icon">🔔</span><span>Notifs</span>
+      <span id="mIconBell"></span><span>Notifs</span>
       <span class="mobile-nav-badge" id="mobileNotifBadge" style="display:none">0</span>
     </div>
     <div class="mobile-nav-link" data-page="messages" onclick="showPage('messages')">
-      <span class="mnav-icon">✉️</span><span>Messages</span>
+      <span id="mIconMail"></span><span>Messages</span>
+      <span class="mobile-nav-badge" id="mobileMsgBadge" style="display:none">·</span>
     </div>
     <div class="mobile-nav-link" data-page="profile" onclick="showPage('profile')">
-      <span class="mnav-icon">👤</span><span>Profile</span>
+      <span id="mIconUser"></span><span>Profile</span>
+    </div>
+    <div class="mobile-nav-link" data-page="admin" id="mobileAdminLink" onclick="showPage('admin')" style="display:none;color:var(--admin)">
+      <span id="mIconAdmin"></span><span>Admin</span>
     </div>
   </div>
 </nav>
@@ -342,7 +374,7 @@
 <div class="modal-overlay" id="postModal" onclick="if(event.target===this)closeModal('postModal')">
   <div class="modal-card" style="max-width:600px">
     <div class="modal-header">
-      <div class="modal-close" onclick="closeModal('postModal')">✕</div>
+      <div class="modal-close" onclick="closeModal('postModal')" id="postModalClose"></div>
       <h2>Post</h2>
     </div>
     <div id="postModalBody"></div>
@@ -353,7 +385,7 @@
 <div class="modal-overlay" id="newPostModal" onclick="if(event.target===this)closeModal('newPostModal')">
   <div class="modal-card">
     <div class="modal-header">
-      <div class="modal-close" onclick="closeModal('newPostModal')">✕</div>
+      <div class="modal-close" onclick="closeModal('newPostModal')" id="newPostModalClose"></div>
       <h2>New Post</h2>
     </div>
     <div class="modal-body">
@@ -373,7 +405,7 @@
 <div class="modal-overlay" id="editProfileModal" onclick="if(event.target===this)closeModal('editProfileModal')">
   <div class="modal-card">
     <div class="modal-header">
-      <div class="modal-close" onclick="closeModal('editProfileModal')">✕</div>
+      <div class="modal-close" onclick="closeModal('editProfileModal')" id="editProfileClose"></div>
       <h2>Edit Profile</h2>
       <button class="btn btn-primary btn-sm" onclick="saveProfile()" style="margin-left:auto">Save</button>
     </div>
@@ -393,18 +425,26 @@
 <!-- PAYWALL MODAL -->
 <div class="paywall-modal" id="paywallModal" onclick="if(event.target===this)closePaywall()">
   <div class="paywall-card">
-    <div class="paywall-icon">✓</div>
+    <div class="paywall-badge-wrap">
+      <svg width="52" height="52" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="12" fill="#1d9bf0"/>
+        <path d="M9.5 16.5l-4-4 1.41-1.41L9.5 13.67l7.59-7.59L18.5 7.5z" fill="white"/>
+      </svg>
+    </div>
     <div class="paywall-title">Get Verified</div>
     <div class="paywall-desc">Unlock full access to X Club — post, connect, message, and attend events</div>
     <div class="paywall-price">€1,999</div>
-    <div class="paywall-price-sub">per year · cancel anytime</div>
+    <div class="paywall-price-sub">per month</div>
+    <div class="paywall-recurring-note">
+      Auto-renews monthly. Your verified status stays active as long as your subscription is current. Cancel anytime — verification is removed at end of billing period.
+    </div>
     <div class="paywall-features">
-      <div class="paywall-feature">Post updates, photos and events</div>
-      <div class="paywall-feature">Send connection requests</div>
-      <div class="paywall-feature">Private messaging with members</div>
-      <div class="paywall-feature">Access private events</div>
-      <div class="paywall-feature">Verified badge on your profile</div>
-      <div class="paywall-feature">Priority in discovery feed</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF1"></span> Post updates, photos and events</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF2"></span> Send connection requests</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF3"></span> Private messaging with picture support</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF4"></span> Access private events</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF5"></span> Verified badge on your profile</div>
+      <div class="paywall-feature"><span class="paywall-feature-icon" id="pwF6"></span> Priority in discovery feed</div>
     </div>
     <button class="btn btn-accent btn-block btn-lg" onclick="initiatePayment()">Pay with Flutterwave</button>
     <button class="btn btn-outline btn-block" onclick="closePaywall()" style="margin-top:10px">Maybe later</button>
@@ -416,108 +456,42 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
+<script src="cloudinary.js"></script>
 <script src="firebase.js"></script>
 <script src="app.js"></script>
+
 <script>
-// Extra small helpers wired to HTML
-async function sendReset() {
-  const email = document.getElementById('resetEmail').value.trim();
-  if (!email) return showToast('Enter your email');
-  try {
-    await window.XF.resetPw(email);
-    showToast('Reset link sent — check your inbox');
-    showPage('login');
-  } catch(err) {
-    showToast('Could not send reset link');
-  }
-}
-function switchFeedTab(tab, el) {
-  feedTab = tab;
-  document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderFeed();
-}
-async function submitModalPost() {
-  const textarea = document.getElementById('modalPostText');
-  const text = textarea.value.trim();
-  if (!text) return showToast('Write something first');
-  if (!requireVerified('post')) return;
-  const btn = document.querySelector('#newPostModal .composer-submit');
-  btn.disabled = true; btn.textContent = 'Posting…';
-  try {
-    await window.XF.push('posts', {
-      authorUid: currentUser.uid,
-      text: text,
-      type: 'post',
-      createdAt: window.XF.ts(),
-      commentCount: 0,
-    });
-    textarea.value = '';
-    closeModal('newPostModal');
-    showToast('Posted!');
-    if (activePage === 'feed') renderFeed();
-  } catch(e) {
-    showToast('Failed to post');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Post';
-  }
-}
-
-// Populate composer avatar
-function updateComposerAvatar() {
-  const el = document.getElementById('composerAvatar');
-  if (el && currentProfile) {
-    el.outerHTML = avatarHTML(currentProfile, 'md').replace('<div class="avatar', '<div id="composerAvatar" class="avatar').replace('<img class="avatar', '<img id="composerAvatar" class="avatar');
-  }
-}
-
-// Load suggested members in sidebar
-async function loadSuggested() {
-  const c = document.getElementById('suggestedMembers');
-  if (!c || !window.XF) return;
-  try {
-    const snap = await window.XF.get('users');
-    const people = [];
-    if (snap.exists()) snap.forEach(s => { if (s.key !== (currentUser&&currentUser.uid)) people.push(s.val()); });
-    const shown = people.filter(p=>p.verified).slice(0,3).concat(people.filter(p=>!p.verified).slice(0,2));
-    if (shown.length === 0) { c.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">No members yet</div>'; return; }
-    c.innerHTML = shown.slice(0,4).map(p => `
-      <div class="sidebar-item" onclick="openUserProfile('${p.uid}', event)" style="display:flex;align-items:center;gap:10px">
-        ${avatarHTML(p,'sm')}
-        <div style="min-width:0;flex:1">
-          <div style="font-weight:700;font-size:0.88rem;display:flex;align-items:center;gap:3px">${p.displayName||'Member'}${verifiedBadge(p.verified)}</div>
-          <div style="color:var(--text-dim);font-size:0.78rem">@${p.handle||'member'}</div>
-        </div>
-        ${p.uid !== (currentUser&&currentUser.uid) ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();sendConnectionRequest('${p.uid}')" style="font-size:0.75rem;padding:4px 10px">Connect</button>` : ''}
-      </div>`).join('');
-  } catch(e) {}
-}
-
-// Watch for notifications
-function startNotifWatch() {
-  if (!currentUser) return;
-  window.XF.on(`notifications/${currentUser.uid}`, snap => {
-    let unread = 0;
-    if (snap.exists()) snap.forEach(c => { if (!c.val().read) unread++; });
-    ['navNotifBadge','mobileNotifBadge'].forEach(id => {
-      const b = document.getElementById(id);
-      if (b) { b.textContent = unread; b.style.display = unread > 0 ? 'flex' : 'none'; }
-    });
+// ── Inject SVG icons after app.js loads ──
+document.addEventListener('DOMContentLoaded', () => {
+  const iconMap = {
+    iconHome:     ICONS.home,
+    iconDiscover: ICONS.discover,
+    iconBell:     ICONS.bell,
+    iconMail:     ICONS.mail,
+    iconUser:     ICONS.user,
+    iconAdmin:    ICONS.admin,
+    mIconHome:     ICONS.home,
+    mIconDiscover: ICONS.discover,
+    mIconBell:     ICONS.bell,
+    mIconMail:     ICONS.mail,
+    mIconUser:     ICONS.user,
+    mIconAdmin:    ICONS.admin,
+    sidebarSearchIcon: ICONS.search,
+    cameraIconWrap:    ICONS.camera,
+    emptyMailIcon:     ICONS.mail,
+    postModalClose:    ICONS.xmark,
+    newPostModalClose: ICONS.xmark,
+    editProfileClose:  ICONS.xmark,
+    // paywall checkmarks
+    pwF1: ICONS.check, pwF2: ICONS.check, pwF3: ICONS.check,
+    pwF4: ICONS.check, pwF5: ICONS.check, pwF6: ICONS.check,
+  };
+  Object.entries(iconMap).forEach(([id, svg]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = svg;
   });
-}
-
-// Override onAuthChange to also do extra setup
-const _origAuthChange = onAuthChange;
-window.onAuthChange = async function(user) {
-  await _origAuthChange(user);
-  if (user && currentProfile) {
-    updateComposerAvatar();
-    loadSuggested();
-    startNotifWatch();
-  }
-};
-// Re-wire firebase auth callback
-document.addEventListener('DOMContentLoaded', () => {});
+});
 </script>
+
 </body>
 </html>
