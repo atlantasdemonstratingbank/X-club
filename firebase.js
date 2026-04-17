@@ -82,24 +82,6 @@ async function loadFirebaseSDKs() {
   return window._FB;
 }
 
-  window._FB = {
-    auth: _auth, db: _db,
-    /* Auth */
-    onAuthStateChanged, signInWithEmailAndPassword,
-    createUserWithEmailAndPassword, signOut,
-    sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup, updateProfile,
-    /* DB helpers */
-    ref, set, get, push, update, remove, onValue, off,
-    serverTimestamp, onDisconnect, query,
-    orderByChild, limitToLast, equalTo,
-    /* Path constants */
-    XDB
-  };
-
-  initPresence();
-  return window._FB;
-}
-
 /* ── Auth helpers ────────────────────────────────────────────────────── */
 async function xSignUp(email, password, displayName) {
   const { auth, createUserWithEmailAndPassword, updateProfile, db, ref, set, serverTimestamp } = window._FB;

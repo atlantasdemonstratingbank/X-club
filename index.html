@@ -114,24 +114,28 @@ setTimeout(window.removeAppLoader,4000);
 </script>
 
 <!-- ═══════════════════════════════ NAVIGATION ═══════════════════════════ -->
+<a class="skip-link" href="#mainContent" data-i18n="nav.skipToContent">Skip to content</a>
 <nav id="mainNav" role="navigation" aria-label="Main navigation">
   <a class="nav-logo" onclick="showPage('home');playClick()" aria-label="X Club Home">X<span>·</span>Club</a>
-  <a class="nav-skip" href="#mainContent" data-i18n="nav.skipToContent">Skip to content</a>
 
   <!-- Language selector -->
-  <div class="lang-selector" id="langSelector" onclick="toggleLangMenu()" aria-label="Language" role="button" tabindex="0">
-    <span id="currentLangFlag">🇬🇧</span>
-    <span id="currentLangCode">EN</span>
-    <div class="lang-menu" id="langMenu">
-      <div onclick="setLang('en');event.stopPropagation()">🇬🇧 EN</div>
-      <div onclick="setLang('pt');event.stopPropagation()">🇵🇹 PT</div>
-      <div onclick="setLang('es');event.stopPropagation()">🇪🇸 ES</div>
-      <div onclick="setLang('de');event.stopPropagation()">🇩🇪 DE</div>
+  <div class="lang-selector" id="langSelector" aria-label="Language">
+    <div class="lang-trigger" onclick="toggleLangMenu()" role="button" tabindex="0">
+      <span id="currentLangFlag">🇬🇧</span>
+      <span id="currentLangCode">EN</span>
+    </div>
+    <div class="lang-dropdown" id="langMenu">
+      <div class="lang-option" onclick="setLanguage('en');event.stopPropagation()">🇬🇧 EN</div>
+      <div class="lang-option" onclick="setLanguage('pt');event.stopPropagation()">🇵🇹 PT</div>
+      <div class="lang-option" onclick="setLanguage('es');event.stopPropagation()">🇪🇸 ES</div>
+      <div class="lang-option" onclick="setLanguage('de');event.stopPropagation()">🇩🇪 DE</div>
     </div>
   </div>
 
   <!-- Hamburger -->
-  <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu" aria-expanded="false">☰</button>
+  <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
 
   <!-- Nav links -->
   <div class="nav-links" id="navLinks" role="menubar">
@@ -659,9 +663,9 @@ setTimeout(window.removeAppLoader,4000);
     <h3 class="modal-title" id="curatorModalTitle" data-i18n="curator.title">Contact Your Curator</h3>
     <p class="modal-subtitle" data-i18n="curator.subtitle">Our curators assist you personally — by phone, video call, or message.</p>
     <div style="display:flex;flex-direction:column;gap:.75rem">
-      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.callBtn">📱 Request a Call</button>
-      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.videoBtn">🎥 Schedule Video Call</button>
-      <button class="btn btn-ghost btn-block" onclick="closeCuratorModal();showPage('messages');playClick()" data-i18n="curator.msgBtn">💬 Send a Message</button>
+      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.callBtn">Request a Call</button>
+      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.videoBtn">Schedule Video Call</button>
+      <button class="btn btn-ghost btn-block" onclick="closeCuratorModal();showPage('messages');playClick()" data-i18n="curator.msgBtn">Send a Message</button>
     </div>
     <p class="modal-note" style="margin-top:1.25rem" data-i18n="curator.hours">Available Mon–Fri, 8:00–20:00 CET. Emergency assistance 24/7 for Private members.</p>
   </div>
@@ -691,7 +695,7 @@ setTimeout(window.removeAppLoader,4000);
 <!-- Push Notification Permission Modal -->
 <div id="pushModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pushModalTitle">
   <div class="modal" style="text-align:center">
-    <div style="font-size:2.5rem;margin-bottom:.75rem">🔔</div>
+    <div style="font-size:2.5rem;margin-bottom:.75rem;color:var(--gold);font-family:var(--font-display)">◈</div>
     <h3 class="modal-title" id="pushModalTitle" data-i18n="push.title">Stay Informed</h3>
     <p class="modal-subtitle" data-i18n="push.body">Enable notifications to receive bid updates, messages, and event reminders.</p>
     <div style="display:flex;gap:.75rem;margin-top:.5rem">
@@ -703,7 +707,7 @@ setTimeout(window.removeAppLoader,4000);
 
 <!-- ═══════════════════════════════ PWA INSTALL BANNER ═══════════════════ -->
 <div id="installBanner" role="complementary" aria-label="Install X Club">
-  <div style="font-size:1.4rem">📱</div>
+  <div style="font-size:1.2rem;color:var(--gold);font-family:var(--font-display);font-weight:300">X·C</div>
   <div class="install-text">
     <strong data-i18n="install.title">Install X Club</strong>
     <span data-i18n="install.body">Add to your home screen for the best experience.</span>
@@ -716,7 +720,7 @@ setTimeout(window.removeAppLoader,4000);
 <div id="toastContainer" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <!-- ═══════════════════════════════ ACCESSIBILITY PANEL ══════════════════ -->
-<button id="a11yBtn" aria-label="Accessibility options" aria-expanded="false" aria-controls="a11yPanel">♿</button>
+<button id="a11yBtn" aria-label="Accessibility options" aria-expanded="false" aria-controls="a11yPanel">Aa</button>
 <div id="a11yPanel" role="region" aria-label="Accessibility settings">
   <div class="a11y-title" data-i18n="a11y.title">Accessibility</div>
   <div class="a11y-row">

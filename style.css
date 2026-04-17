@@ -1507,12 +1507,32 @@ footer {
 @media (max-width: 768px) {
   :root { --nav-h: 56px; --sidebar-w: 0px; }
 
+  /* Container - prevent edge-to-edge text */
+  .container { padding: 0 1.25rem; }
+  .section { padding: 4rem 0; }
+  .section-sm { padding: 2.5rem 0; }
+
+  /* Nav */
   .nav-links { display: none; flex-direction: column; position: fixed; top: var(--nav-h); left: 0; right: 0; background: rgba(8,12,20,.97); padding: 1.5rem; gap: 1rem; border-bottom: 1px solid var(--gold-dim); z-index: 800; }
   .nav-links.open { display: flex; }
   .nav-hamburger { display: flex; }
   .nav-actions   { display: none; }
 
-  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+  /* Typography — comfortable reading on small screens */
+  .display-xl { font-size: clamp(2rem, 8vw, 2.8rem); line-height: 1.12; }
+  .display-lg { font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.15; }
+  .display-md { font-size: clamp(1.25rem, 5vw, 1.7rem); }
+  .eyebrow    { font-size: .6rem; letter-spacing: .18em; }
+
+  /* Hero */
+  .hero-title { font-size: clamp(2rem, 8vw, 2.8rem) !important; }
+  .hero-subtitle { font-size: .88rem; line-height: 1.65; }
+  .hero-ctas { flex-direction: column; gap: .75rem; }
+  .hero-ctas .btn { width: 100%; max-width: 340px; }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+  .hero-stat-num { font-size: 1.6rem; }
+
+  /* Grids */
   .features-grid, .testimonials-grid, .privacy-pillars { grid-template-columns: 1fr; }
   .auction-grid      { grid-template-columns: 1fr; }
   .membership-tiers  { grid-template-columns: 1fr; }
@@ -1521,25 +1541,96 @@ footer {
   .footer-grid       { grid-template-columns: 1fr; gap: 1.5rem; }
   .events-teaser-grid{ grid-template-columns: 1fr; }
   .dash-grid         { grid-template-columns: 1fr; }
-  .dash-stats-grid   { grid-template-columns: repeat(2, 1fr); }
+  .dash-stats-grid   { grid-template-columns: repeat(2, 1fr); gap: .75rem; }
 
+  /* Dashboard */
   .sidebar { display: none; }
   .dash-layout { flex-direction: column; }
-  .dash-main { padding: 1.25rem; }
+  .dash-main { padding: 1rem; }
 
+  /* Messages */
   .messages-layout   { grid-template-columns: 1fr; height: auto; }
-  .messages-sidebar  { max-height: 220px; }
+  .messages-sidebar  { max-height: 200px; }
 
+  /* Concierge */
   .concierge-categories { grid-template-columns: repeat(2, 1fr); }
 
-  .onboarding-card { padding: 2rem 1.25rem; }
-  .hero-ctas { flex-direction: column; }
+  /* Forms */
+  .onboarding-card { padding: 1.5rem 1rem; }
+  .auth-card { padding: 1.75rem 1.25rem; }
+  .form-group { margin-bottom: .85rem; }
+
+  /* Membership cards */
+  .tier-card { padding: 1.75rem 1.25rem; }
+
+  /* Modals */
+  .modal { padding: 1.5rem 1.25rem; max-width: calc(100vw - 2rem); margin: 1rem; }
+  .modal-title { font-size: 1.2rem; }
+
+  /* Toasts */
+  #toastContainer { right: 1rem; left: 1rem; max-width: none; bottom: 1rem; }
+  .toast { padding: .75rem .9rem; }
+
+  /* A11y panel */
+  #a11yBtn { bottom: 1rem; left: 1rem; width: 40px; height: 40px; font-size: .75rem; }
+  #a11yPanel { bottom: 3.5rem; left: 1rem; }
+
+  /* Feature cards */
+  .feature-card { padding: 1.25rem; }
+
+  /* Auction cards */
+  .auction-card-body { padding: 1rem; }
+
+  /* Prevent any element from causing horizontal scroll */
+  * { max-width: 100%; }
+  img, video, iframe { max-width: 100%; height: auto; }
 }
 
 @media (max-width: 480px) {
-  .display-xl { font-size: 2.2rem; }
+  :root { --nav-h: 52px; }
+
+  .container { padding: 0 1rem; }
+  .section { padding: 3rem 0; }
+
+  /* Even smaller text tune */
+  .display-xl { font-size: clamp(1.75rem, 9vw, 2.2rem); }
+  .display-lg { font-size: clamp(1.4rem, 7vw, 1.8rem); }
+  .hero-title { font-size: clamp(1.75rem, 9vw, 2.2rem) !important; }
+  body { font-size: .9rem; }
+
+  /* Stats 2-col remains but tighter */
+  .hero-stats { gap: .6rem; }
+  .hero-stat-num { font-size: 1.4rem; }
+
+  /* Nav logo slightly smaller */
+  .nav-logo { font-size: 1.25rem; }
+
+  /* Buttons full-width in small modals */
+  .auth-card .btn { font-size: .82rem; }
+
+  .footer-bottom { flex-direction: column; text-align: center; gap: .5rem; }
+
+  /* Membership price note wraps cleanly */
+  .tier-price-note { font-size: .72rem; line-height: 1.5; }
+
+  /* Dashboard stats readable */
   .dash-stats-grid { grid-template-columns: 1fr 1fr; }
-  .footer-bottom { flex-direction: column; text-align: center; }
+  .dash-stat-num { font-size: 1.4rem; }
+  .dash-stat-label { font-size: .65rem; }
+
+  /* Auction filters wrap */
+  .auction-filters { flex-wrap: wrap; gap: .4rem; }
+  .filter-btn { font-size: .65rem; padding: .35rem .7rem; }
+}
+
+@media (max-width: 360px) {
+  .container { padding: 0 .875rem; }
+  .display-xl { font-size: 1.6rem; }
+  .hero-title { font-size: 1.6rem !important; }
+  .hero-stat-num { font-size: 1.25rem; }
+  .tier-card { padding: 1.25rem .875rem; }
+  .modal { padding: 1.25rem 1rem; }
+  .btn-gold, .btn-ghost { padding: .65rem 1rem; font-size: .8rem; }
 }
 
 /* ══════════════════════════════════════════════════
