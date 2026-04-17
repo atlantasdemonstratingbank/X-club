@@ -3,748 +3,521 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#D4AF37">
-  <meta name="description" content="X Club — The world's most exclusive private digital club for verified high-net-worth individuals.">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="X Club — The premium business social network">
   <title>X Club</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
 
-<!-- ═══════════════════════════════ APP LOADER ════════════════════════════ -->
+<!-- ═══════════════════ LOADER ═══════════════════ -->
 <div id="appLoader">
-  <div class="xl-bg"></div>
-  <div class="xl-particles" id="xlParticles"></div>
-  <div class="xl-center">
-    <div class="xl-ring xl-ring3"></div>
-    <div class="xl-ring xl-ring1"></div>
-    <div class="xl-ring xl-ring2"></div>
-    <div class="xl-monogram">
-      <span class="xl-x">X</span><span class="xl-dot">·</span><span class="xl-c">Club</span>
-    </div>
-  </div>
-  <div class="xl-bottom">
-    <div class="xl-line-wrap"><div class="xl-line"></div></div>
-    <div class="xl-tagline">Private. Verified. Exclusive.</div>
-  </div>
+  <div class="loader-logo">✕</div>
 </div>
-<style>
-#appLoader {
-  position:fixed;inset:0;z-index:9999;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:#080c14;
-  transition:opacity 0.6s ease;
-}
-#appLoader.xl-gone{opacity:0;pointer-events:none;}
-.xl-bg{
-  position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse 60% 50% at 50% 40%,rgba(212,175,55,.07) 0%,transparent 70%),
-    radial-gradient(ellipse 40% 60% at 20% 80%,rgba(212,175,55,.04) 0%,transparent 60%),
-    radial-gradient(ellipse 30% 40% at 80% 20%,rgba(192,200,212,.03) 0%,transparent 60%);
-}
-.xl-particles{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
-.xl-particle{
-  position:absolute;border-radius:50%;
-  background:radial-gradient(circle,rgba(212,175,55,.8),transparent);
-  animation:xlFloat linear infinite;opacity:0;
-}
-@keyframes xlFloat{
-  0%  {transform:translateY(100vh) scale(0);opacity:0;}
-  10% {opacity:.8;}
-  90% {opacity:.4;}
-  100%{transform:translateY(-20vh) scale(1.5);opacity:0;}
-}
-.xl-center{position:relative;display:flex;align-items:center;justify-content:center;}
-.xl-ring{position:absolute;border-radius:50%;border:1px solid rgba(212,175,55,.15);}
-.xl-ring1{width:260px;height:260px;border-color:rgba(212,175,55,.2);animation:xlPulse 3s ease-in-out infinite;}
-.xl-ring2{width:200px;height:200px;border-color:rgba(212,175,55,.1);animation:xlPulse 3s ease-in-out infinite .5s;border-style:dashed;}
-.xl-ring3{width:310px;height:310px;border-color:rgba(212,175,55,.06);animation:xlSpin 18s linear infinite;border-top-color:rgba(212,175,55,.35);}
-@keyframes xlPulse{0%,100%{transform:scale(1);opacity:.6;}50%{transform:scale(1.05);opacity:1;}}
-@keyframes xlSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-.xl-monogram{
-  position:relative;z-index:2;
-  font-family:'Cormorant Garamond',Georgia,serif;
-  font-weight:300;letter-spacing:.12em;text-align:center;
-  animation:xlFadeIn 1.4s cubic-bezier(.16,1,.3,1) forwards;
-}
-.xl-x  {font-size:4.5rem;color:#D4AF37;display:inline-block;}
-.xl-dot{font-size:2rem;color:rgba(192,200,212,.65);margin:0 .15em;vertical-align:middle;}
-.xl-c  {font-size:3.8rem;color:#f4f2ee;font-weight:300;display:inline-block;}
-@keyframes xlFadeIn{
-  from{opacity:0;transform:scale(.93) translateY(8px);letter-spacing:.32em;}
-  to  {opacity:1;transform:scale(1)   translateY(0);  letter-spacing:.12em;}
-}
-.xl-bottom{position:absolute;bottom:13%;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:1.1rem;}
-.xl-line-wrap{width:100px;height:1px;background:rgba(212,175,55,.1);position:relative;overflow:hidden;border-radius:1px;}
-.xl-line{
-  position:absolute;inset:0;
-  background:linear-gradient(90deg,transparent,#D4AF37,#E8CE6A,#D4AF37,transparent);
-  animation:xlShimmer 1.8s ease-in-out infinite;
-}
-@keyframes xlShimmer{0%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
-.xl-tagline{
-  font-family:'DM Sans',system-ui,sans-serif;
-  font-size:.62rem;font-weight:400;letter-spacing:.38em;text-transform:uppercase;
-  color:rgba(192,200,212,.4);
-  animation:xlFadeIn 2.2s ease forwards;
-}
-</style>
-<script>
-(function(){
-  var c=document.getElementById('xlParticles');
-  if(!c)return;
-  for(var i=0;i<18;i++){
-    var p=document.createElement('div');
-    p.className='xl-particle';
-    var s=Math.random()*3+1;
-    p.style.cssText='width:'+s+'px;height:'+s+'px;left:'+(Math.random()*100)+'%;animation-duration:'+(Math.random()*8+6)+'s;animation-delay:'+(Math.random()*5)+'s;';
-    c.appendChild(p);
-  }
-})();
-window.removeAppLoader=function(){
-  var el=document.getElementById('appLoader');
-  if(!el)return;
-  el.classList.add('xl-gone');
-  setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},700);
-};
-setTimeout(window.removeAppLoader,4000);
-</script>
 
-<!-- ═══════════════════════════════ NAVIGATION ═══════════════════════════ -->
-<a class="skip-link" href="#mainContent" data-i18n="nav.skipToContent">Skip to content</a>
-<nav id="mainNav" role="navigation" aria-label="Main navigation">
-  <a class="nav-logo" onclick="showPage('home');playClick()" aria-label="X Club Home">X<span>·</span>Club</a>
+<!-- ═══════════════════ TOAST ═══════════════════ -->
+<div id="toastContainer"></div>
 
-  <!-- Language selector -->
-  <div class="lang-selector" id="langSelector" aria-label="Language">
-    <div class="lang-trigger" onclick="toggleLangMenu()" role="button" tabindex="0">
-      <span id="currentLangFlag">🇬🇧</span>
-      <span id="currentLangCode">EN</span>
+<!-- ═══════════════════ MAIN APP ═══════════════════ -->
+<div id="app">
+
+  <!-- LEFT NAV -->
+  <nav class="left-nav">
+    <div class="nav-logo" onclick="showPage('feed')">✕</div>
+    <div class="nav-links">
+      <div class="nav-link" data-page="feed" onclick="showPage('feed')">
+        <span class="nav-icon">🏠</span><span>Home</span>
+      </div>
+      <div class="nav-link" data-page="discover" onclick="showPage('discover')">
+        <span class="nav-icon">🔍</span><span>Discover</span>
+      </div>
+      <div class="nav-link" data-page="notifications" onclick="showPage('notifications')">
+        <span class="nav-icon">🔔</span><span>Notifications</span>
+        <span class="nav-badge" id="navNotifBadge" style="display:none">0</span>
+      </div>
+      <div class="nav-link" data-page="messages" onclick="showPage('messages')">
+        <span class="nav-icon">✉️</span><span>Messages</span>
+      </div>
+      <div class="nav-link" data-page="profile" onclick="showPage('profile')">
+        <span class="nav-icon">👤</span><span>Profile</span>
+      </div>
     </div>
-    <div class="lang-dropdown" id="langMenu">
-      <div class="lang-option" onclick="setLanguage('en');event.stopPropagation()">🇬🇧 EN</div>
-      <div class="lang-option" onclick="setLanguage('pt');event.stopPropagation()">🇵🇹 PT</div>
-      <div class="lang-option" onclick="setLanguage('es');event.stopPropagation()">🇪🇸 ES</div>
-      <div class="lang-option" onclick="setLanguage('de');event.stopPropagation()">🇩🇪 DE</div>
+
+    <button class="nav-post-btn" onclick="openPostModal()"><span>Post</span></button>
+
+    <div class="nav-user" id="navUserWrap" style="display:none" onclick="showPage('profile')">
+      <div class="avatar avatar-md" id="navUserAvatar"></div>
+      <div class="nav-user-info">
+        <div class="nav-user-name" id="navUserName"></div>
+        <div class="nav-user-handle" id="navUserHandle"></div>
+      </div>
+      <div style="color:var(--text-dim);font-size:0.9rem">···</div>
     </div>
-  </div>
+  </nav>
 
-  <!-- Hamburger -->
-  <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu" aria-expanded="false">
-    <span></span><span></span><span></span>
-  </button>
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
 
-  <!-- Nav links -->
-  <div class="nav-links" id="navLinks" role="menubar">
-    <a onclick="showPage('home');playClick()" role="menuitem" data-i18n="nav.home">Home</a>
-    <a onclick="showPage('membership');playClick()" role="menuitem" data-i18n="nav.membership">Membership</a>
-    <a onclick="showPage('auctions');playClick()" role="menuitem" data-i18n="nav.auctions">Auctions</a>
-    <a onclick="showPage('events');playClick()" role="menuitem" data-i18n="nav.events">Events</a>
-    <a id="navDash" onclick="showPage('dashboard');playClick()" role="menuitem" style="display:none" data-i18n="nav.dashboard">Dashboard</a>
-    <span id="navUserName" style="display:none;font-size:.78rem;color:var(--silver-dim);padding:.5rem 0"></span>
-    <a id="navApply" class="btn btn-gold btn-sm" onclick="showPage('membership');playClick()" role="menuitem" data-i18n="nav.applyForMembership">Apply for Membership</a>
-    <a id="navLogin" class="btn btn-ghost btn-sm" onclick="showPage('login');playClick()" role="menuitem" data-i18n="nav.memberLogin">Sign In</a>
+    <!-- ── LANDING PAGE ── -->
+    <div class="page active" id="page-landing">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;">
+        <div style="max-width:420px;width:100%;text-align:center">
+          <div style="font-size:4rem;font-weight:900;margin-bottom:32px;letter-spacing:-0.04em">✕</div>
+          <h1 style="font-size:2.5rem;font-weight:900;margin-bottom:16px;letter-spacing:-0.02em">Happening now</h1>
+          <p style="color:var(--text-dim);font-size:1.1rem;margin-bottom:40px;line-height:1.5">The premium business social network. Build real connections. Verified members only.</p>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <button class="btn btn-primary btn-lg btn-block" onclick="showPage('register')">Create account</button>
+            <div style="color:var(--text-dim);font-size:0.85rem">Already have an account?</div>
+            <button class="btn btn-outline btn-lg btn-block" onclick="showPage('login')">Sign in</button>
+          </div>
+          <p style="margin-top:32px;color:var(--text-muted);font-size:0.78rem;line-height:1.5">
+            By signing up you agree to the Terms of Service and Privacy Policy.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LOGIN ── -->
+    <div class="page" id="page-login">
+      <div class="auth-page">
+        <div class="auth-card">
+          <div class="auth-logo">✕</div>
+          <div class="auth-title">Sign in to X Club</div>
+          <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input id="loginEmail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input id="loginPass" class="form-input" type="password" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button id="loginBtn" class="btn btn-primary btn-block" type="submit">Sign in</button>
+          </form>
+          <div class="divider">or</div>
+          <button class="btn-google" onclick="handleGoogleAuth()">
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+            Continue with Google
+          </button>
+          <div class="auth-footer">
+            Don't have an account? <a onclick="showPage('register')">Sign up</a>
+          </div>
+          <div class="auth-footer" style="margin-top:8px">
+            <a onclick="showPage('reset')" style="color:var(--text-dim)">Forgot password?</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REGISTER ── -->
+    <div class="page" id="page-register">
+      <div class="auth-page">
+        <div class="auth-card">
+          <div class="auth-logo">✕</div>
+          <div class="auth-title">Join X Club</div>
+          <div class="auth-sub">Create your account — free to join, verify to unlock everything</div>
+          <form onsubmit="handleRegister(event)">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input id="regName" class="form-input" type="text" placeholder="Alexandra Smith" autocomplete="name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-dim)">@</span>
+                <input id="regHandle" class="form-input" type="text" placeholder="yourhandle" style="padding-left:30px" autocomplete="username">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input id="regEmail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input id="regPass" class="form-input" type="password" placeholder="Min. 8 characters" autocomplete="new-password">
+            </div>
+            <button id="regBtn" class="btn btn-primary btn-block" type="submit">Create account</button>
+          </form>
+          <div class="divider">or</div>
+          <button class="btn-google" onclick="handleGoogleAuth()">
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+            Continue with Google
+          </button>
+          <div class="auth-footer">
+            Already a member? <a onclick="showPage('login')">Sign in</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PASSWORD RESET ── -->
+    <div class="page" id="page-reset">
+      <div class="auth-page">
+        <div class="auth-card">
+          <div class="auth-logo">✕</div>
+          <div class="auth-title">Reset password</div>
+          <div class="auth-sub">Enter your email and we'll send you a reset link</div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input id="resetEmail" class="form-input" type="email" placeholder="you@example.com">
+          </div>
+          <button class="btn btn-primary btn-block" onclick="sendReset()">Send reset link</button>
+          <div class="auth-footer" style="margin-top:16px">
+            <a onclick="showPage('login')">← Back to sign in</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FEED ── -->
+    <div class="page" id="page-feed">
+      <div class="feed-tabs">
+        <div class="feed-tab active" onclick="switchFeedTab('for-you', this)">For you</div>
+        <div class="feed-tab" onclick="switchFeedTab('following', this)">Following</div>
+      </div>
+
+      <!-- Composer -->
+      <div class="composer" id="feedComposer">
+        <div id="composerAvatar"></div>
+        <div class="composer-body">
+          <textarea id="postText" placeholder="What's happening?" rows="3" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+
+          <!-- Event toggle -->
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button id="postTypePost" class="btn btn-outline btn-sm active" onclick="togglePostType('post')" style="font-size:0.78rem">📝 Post</button>
+            <button id="postTypeEvent" class="btn btn-outline btn-sm" onclick="togglePostType('event')" style="font-size:0.78rem">📅 Event</button>
+          </div>
+
+          <!-- Event fields -->
+          <div id="eventFields" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;display:none">
+            <div class="form-group" style="margin-bottom:10px">
+              <input id="eventTitle" class="form-input" placeholder="Event title" style="font-size:0.88rem">
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <input id="eventDate" class="form-input" type="date" style="flex:1;font-size:0.85rem">
+              <input id="eventTime" class="form-input" type="time" style="flex:1;font-size:0.85rem">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <input id="eventLocation" class="form-input" placeholder="Location (optional)" style="font-size:0.88rem">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer">
+              <input id="eventPrivate" type="checkbox"> Private event (verified members only)
+            </label>
+          </div>
+
+          <div id="postImagePreview"></div>
+
+          <div class="composer-actions">
+            <label class="composer-tool" title="Add image">
+              📷
+              <input id="postImageInput" type="file" accept="image/*" style="display:none" onchange="previewPostImage(this)">
+            </label>
+            <button id="postSubmitBtn" class="composer-submit" onclick="submitPost()">Post</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="feedPosts"></div>
+    </div>
+
+    <!-- ── DISCOVER ── -->
+    <div class="page" id="page-discover">
+      <div class="page-header">
+        <h1>Discover</h1>
+      </div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <input class="form-input" type="text" placeholder="Search members" oninput="searchUsers(this.value)" style="border-radius:9999px;background:var(--bg-3)">
+        <div id="searchResults"></div>
+      </div>
+      <div class="page-header" style="position:static;border-bottom:none;padding-bottom:0">
+        <div>
+          <div style="font-weight:700">People you might know</div>
+          <div class="page-header-sub">Verified and unverified members</div>
+        </div>
+      </div>
+      <div id="discoverPeople"></div>
+    </div>
+
+    <!-- ── NOTIFICATIONS ── -->
+    <div class="page" id="page-notifications">
+      <div class="page-header"><h1>Notifications</h1></div>
+      <div id="notifList"></div>
+    </div>
+
+    <!-- ── MESSAGES ── -->
+    <div class="page" id="page-messages">
+      <div class="messages-layout">
+        <div class="conversations-list">
+          <div class="page-header" style="position:static"><h1>Messages</h1></div>
+          <div id="convList"></div>
+        </div>
+        <div class="chat-area" id="chatArea">
+          <div class="empty-state" style="margin:auto">
+            <div class="empty-state-icon">💬</div>
+            <div class="empty-state-title">Your messages</div>
+            <div class="empty-state-desc">Select a conversation to start chatting</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── OWN PROFILE ── -->
+    <div class="page" id="page-profile">
+      <div class="page-header">
+        <h1>Profile</h1>
+        <button class="btn btn-outline btn-sm" onclick="handleLogout()" style="margin-left:auto;color:var(--text-dim)">Sign out</button>
+      </div>
+      <div id="ownProfileContent"></div>
+    </div>
+
+    <!-- ── USER PROFILE ── -->
+    <div class="page" id="page-user-profile">
+      <div class="page-header">
+        <div class="pointer" onclick="history.back()" style="font-size:1.2rem">←</div>
+        <div>
+          <h1>Profile</h1>
+        </div>
+      </div>
+      <div id="userProfileContent"></div>
+    </div>
+
+  </main><!-- /main-content -->
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="right-sidebar">
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" type="text" placeholder="Search X Club" oninput="searchUsers(this.value)">
+      </div>
+      <div id="searchResults" style="margin-top:8px"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Suggested members</div>
+      <div id="suggestedMembers">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">About X Club</div>
+      <p style="font-size:0.83rem;color:var(--text-dim);line-height:1.5">
+        The premium business social network. Verified members get full access to posts, events, messaging and deal rooms.
+      </p>
+      <div style="margin-top:12px">
+        <button class="btn btn-accent btn-sm" onclick="showPaywall()">Get Verified ✓</button>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /#app -->
+
+<!-- MOBILE NAV -->
+<nav class="mobile-nav">
+  <div class="mobile-nav-links">
+    <div class="mobile-nav-link" data-page="feed" onclick="showPage('feed')">
+      <span class="mnav-icon">🏠</span><span>Home</span>
+    </div>
+    <div class="mobile-nav-link" data-page="discover" onclick="showPage('discover')">
+      <span class="mnav-icon">🔍</span><span>Discover</span>
+    </div>
+    <div class="mobile-nav-link" data-page="notifications" onclick="showPage('notifications')">
+      <span class="mnav-icon">🔔</span><span>Notifs</span>
+      <span class="mobile-nav-badge" id="mobileNotifBadge" style="display:none">0</span>
+    </div>
+    <div class="mobile-nav-link" data-page="messages" onclick="showPage('messages')">
+      <span class="mnav-icon">✉️</span><span>Messages</span>
+    </div>
+    <div class="mobile-nav-link" data-page="profile" onclick="showPage('profile')">
+      <span class="mnav-icon">👤</span><span>Profile</span>
+    </div>
   </div>
 </nav>
 
-<!-- ═══════════════════════════════ MAIN CONTENT ══════════════════════════ -->
-<main id="mainContent">
+<!-- ═══════════════════ MODALS ═══════════════════ -->
 
-<!-- ──────────────── HOME PAGE ──────────────── -->
-<div id="page-home" class="page active">
-
-  <!-- Hero -->
-  <section class="hero" aria-label="Hero">
-    <div class="hero-bg" aria-hidden="true"></div>
-    <div class="hero-content">
-      <div class="hero-eyebrow">
-        <span class="badge badge-gold" data-i18n="hero.badge">Applications Open — 2025</span>
-      </div>
-      <h1 class="hero-title">
-        <span data-i18n="hero.title1">Where the world's most</span><br>
-        <em data-i18n="hero.title2">distinguished individuals</em><br>
-        <span data-i18n="hero.title3">convene privately.</span>
-      </h1>
-      <p class="hero-subtitle" data-i18n="hero.subtitle">X Club is an invitation-exclusive private membership for verified high-net-worth individuals. Network, invest, bid, and belong — with absolute discretion.</p>
-      <div class="hero-actions">
-        <button class="btn btn-gold btn-lg" onclick="showPage('membership');playClick()" data-i18n="hero.ctaPrimary">Request an Invitation</button>
-        <button class="btn btn-ghost btn-lg" onclick="showPage('membership');playClick()" data-i18n="hero.ctaSecondary">Explore Membership</button>
-      </div>
-      <div class="hero-stats" aria-label="Club statistics">
-        <div class="hero-stat"><div class="hero-stat-num">2,400+</div><div class="hero-stat-label" data-i18n="hero.stat1">Verified Members</div></div>
-        <div class="hero-stat"><div class="hero-stat-num">$4.2B</div><div class="hero-stat-label" data-i18n="hero.stat2">Assets at Auction</div></div>
-        <div class="hero-stat"><div class="hero-stat-num">61</div><div class="hero-stat-label" data-i18n="hero.stat3">Countries Represented</div></div>
-        <div class="hero-stat"><div class="hero-stat-num">100%</div><div class="hero-stat-label" data-i18n="hero.stat4">Identity Verified</div></div>
-      </div>
+<!-- POST DETAIL MODAL -->
+<div class="modal-overlay" id="postModal" onclick="if(event.target===this)closeModal('postModal')">
+  <div class="modal-card" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-close" onclick="closeModal('postModal')">✕</div>
+      <h2>Post</h2>
     </div>
-    <div class="hero-scroll-cue" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">
-      <span data-i18n="hero.scrollCue">Discover</span> ↓
-    </div>
-  </section>
+    <div id="postModalBody"></div>
+  </div>
+</div>
 
-  <!-- Features -->
-  <section id="features" class="section features-section" aria-labelledby="featuresTitle">
-    <div class="section-inner">
-      <div class="section-eyebrow" data-i18n="features.eyebrow">The Experience</div>
-      <h2 class="section-title" id="featuresTitle" data-i18n="features.title">Everything you'd expect.<br>Nothing you'll find elsewhere.</h2>
-      <p class="section-subtitle" data-i18n="features.subtitle">A curated environment for those who have already succeeded.</p>
-      <div class="features-grid">
-        <div class="feature-card"><div class="feature-icon">🔒</div><h3 data-i18n="features.f1.title">Military-Grade Privacy</h3><p data-i18n="features.f1.desc">End-to-end encrypted communications. Zero third-party data sharing.</p></div>
-        <div class="feature-card"><div class="feature-icon">🤖</div><h3 data-i18n="features.f2.title">AI-Powered Matching</h3><p data-i18n="features.f2.desc">Our algorithm identifies co-investment opportunities and kindred individuals.</p></div>
-        <div class="feature-card"><div class="feature-icon">🏺</div><h3 data-i18n="features.f3.title">Luxury Auctions</h3><p data-i18n="features.f3.desc">Bid on rare art, vintage watches, yacht shares, and private residences.</p></div>
-        <div class="feature-card"><div class="feature-icon">🥂</div><h3 data-i18n="features.f4.title">Private Events</h3><p data-i18n="features.f4.desc">Intimate virtual summits, city dinners, investment roundtables, and cultural experiences.</p></div>
-        <div class="feature-card"><div class="feature-icon">🎩</div><h3 data-i18n="features.f5.title">Personal Concierge</h3><p data-i18n="features.f5.desc">Your concierge handles reservations, travel, and special requests. 24/7.</p></div>
-        <div class="feature-card"><div class="feature-icon">🔐</div><h3 data-i18n="features.f6.title">Deal Rooms</h3><p data-i18n="features.f6.desc">Private encrypted deal rooms. Document vault, e-signature, NDA. (Private Tier.)</p></div>
-      </div>
+<!-- NEW POST MODAL (mobile) -->
+<div class="modal-overlay" id="newPostModal" onclick="if(event.target===this)closeModal('newPostModal')">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-close" onclick="closeModal('newPostModal')">✕</div>
+      <h2>New Post</h2>
     </div>
-  </section>
-
-  <!-- Testimonials -->
-  <section class="section testimonials-section" aria-labelledby="testimonialsTitle">
-    <div class="section-inner">
-      <div class="section-eyebrow" data-i18n="testimonials.eyebrow">Members Speak</div>
-      <h2 class="section-title" id="testimonialsTitle" data-i18n="testimonials.title">The highest recommendation<br>is a silent one.</h2>
-      <div class="testimonials-grid">
-        <div class="testimonial-card">
-          <p class="testimonial-text" data-i18n="testimonials.t1.text">"The matching algorithm introduced me to two co-investors in my first month. No other network comes close."</p>
-          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t1.name">E. Hoffmann</div><div class="testimonial-role" data-i18n="testimonials.t1.role">Private Equity, Frankfurt — Private Tier</div></div>
-        </div>
-        <div class="testimonial-card">
-          <p class="testimonial-text" data-i18n="testimonials.t2.text">"I'm 74 and not particularly technical. The onboarding team walked me through by phone. I felt welcomed, not overwhelmed."</p>
-          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t2.name">R. Castellanos</div><div class="testimonial-role" data-i18n="testimonials.t2.role">Retired Entrepreneur, Miami — Classic Tier</div></div>
-        </div>
-        <div class="testimonial-card">
-          <p class="testimonial-text" data-i18n="testimonials.t3.text">"I acquired a fractional share of a 52m sailing yacht at auction. The process was seamless. Extraordinary."</p>
-          <div class="testimonial-author"><div class="testimonial-name" data-i18n="testimonials.t3.name">A. Nkosi</div><div class="testimonial-role" data-i18n="testimonials.t3.role">Tech Founder, London — Private Tier</div></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Events Teaser -->
-  <section class="section events-teaser-section" aria-labelledby="eventsTeaserTitle">
-    <div class="section-inner">
-      <div class="section-eyebrow" data-i18n="eventsTeaser.eyebrow">Calendar</div>
-      <h2 class="section-title" id="eventsTeaserTitle" data-i18n="eventsTeaser.title">Upcoming Events</h2>
-      <div class="events-teaser-grid">
-        <div class="event-teaser-card">
-          <div class="event-teaser-date">18<span>Jan</span></div>
-          <div class="event-teaser-info">
-            <div class="event-teaser-title" data-i18n="eventsTeaser.e1.title">Global Alternative Assets Roundtable</div>
-            <div><span class="badge badge-gold" data-i18n="eventsTeaser.e1.tier">Private Tier</span></div>
-            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e1.format">Virtual — Encrypted</span> · <span data-i18n="eventsTeaser.e1.time">15:00 CET</span> · <span data-i18n="eventsTeaser.e1.capacity">24 seats</span></div>
+    <div class="modal-body">
+      <div class="composer" style="padding:0;border:none">
+        <div class="composer-body" style="width:100%">
+          <textarea id="modalPostText" placeholder="What's happening?" rows="4" style="width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:1.13rem;resize:none"></textarea>
+          <div class="composer-actions">
+            <button class="composer-submit" onclick="submitModalPost()">Post</button>
           </div>
         </div>
-        <div class="event-teaser-card">
-          <div class="event-teaser-date">24<span>Jan</span></div>
-          <div class="event-teaser-info">
-            <div class="event-teaser-title" data-i18n="eventsTeaser.e2.title">Members' Dinner — Monaco</div>
-            <div><span class="badge badge-silver" data-i18n="eventsTeaser.e2.tier">All Members</span></div>
-            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e2.location">Hôtel de Paris, Monte-Carlo</span> · <span data-i18n="eventsTeaser.e2.time">20:00 CET</span> · <span data-i18n="eventsTeaser.e2.capacity">6 seats</span></div>
-          </div>
-        </div>
-        <div class="event-teaser-card">
-          <div class="event-teaser-date">31<span>Jan</span></div>
-          <div class="event-teaser-info">
-            <div class="event-teaser-title" data-i18n="eventsTeaser.e3.title">Art Acquisition Masterclass</div>
-            <div><span class="badge badge-silver" data-i18n="eventsTeaser.e3.tier">All Members</span></div>
-            <div class="event-teaser-meta"><span data-i18n="eventsTeaser.e3.format">Virtual — Encrypted</span> · <span data-i18n="eventsTeaser.e3.time">17:00 GMT</span> · <span data-i18n="eventsTeaser.e3.capacity">60 seats</span></div>
-          </div>
-        </div>
-      </div>
-      <div style="text-align:center;margin-top:2rem">
-        <button class="btn btn-ghost" onclick="showPage('events');playClick()" data-i18n="eventsTeaser.viewAll">View All Events</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Privacy Section -->
-  <section class="section privacy-section" aria-labelledby="privacyTitle">
-    <div class="section-inner">
-      <div class="section-eyebrow" data-i18n="privacy.eyebrow">Discretion First</div>
-      <h2 class="section-title" id="privacyTitle" data-i18n="privacy.title">Your privacy is not a feature.<br>It is the foundation.</h2>
-      <p class="section-subtitle" data-i18n="privacy.desc">X Club enforces a strict non-disclosure policy. AI moderation scans every message in real time.</p>
-      <div class="privacy-grid">
-        <div class="privacy-card"><div class="privacy-icon">🔑</div><h3 data-i18n="privacy.p1.title">End-to-End Encryption</h3><p data-i18n="privacy.p1.desc">All messages and documents are encrypted in transit and at rest.</p></div>
-        <div class="privacy-card"><div class="privacy-icon">🤖</div><h3 data-i18n="privacy.p2.title">AI Safety Moderation</h3><p data-i18n="privacy.p2.desc">Our AI intercepts attempts to share phone numbers or emails.</p></div>
-        <div class="privacy-card"><div class="privacy-icon">🛡️</div><h3 data-i18n="privacy.p3.title">Zero Data Sharing</h3><p data-i18n="privacy.p3.desc">X Club never sells or shares member data with third parties.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA Section -->
-  <section class="section cta-section" aria-labelledby="ctaTitle">
-    <div class="section-inner" style="text-align:center">
-      <h2 class="section-title" id="ctaTitle" data-i18n="cta.title">Ready to apply?</h2>
-      <p class="section-subtitle" data-i18n="cta.desc">Membership by application only. We respond within 5 business days.</p>
-      <button class="btn btn-gold btn-lg" onclick="showPage('membership');playClick()" data-i18n="cta.btn">Begin Application</button>
-    </div>
-  </section>
-
-</div><!-- /page-home -->
-
-<!-- ──────────────── MEMBERSHIP PAGE ──────────────── -->
-<div id="page-membership" class="page">
-  <div class="page-hero">
-    <div class="section-eyebrow" data-i18n="mem.eyebrow">Join X Club</div>
-    <h1 class="page-title" data-i18n="mem.title">Choose Your Tier</h1>
-    <p class="page-subtitle" data-i18n="mem.subtitle">Each tier grants increasing levels of access, privacy, and service.</p>
-  </div>
-  <div class="section-inner">
-    <div class="membership-tiers">
-      <!-- Classic -->
-      <div class="tier-card">
-        <div class="tier-name" data-i18n="mem.classic.name">Classic</div>
-        <div class="tier-price"><span class="tier-price-amt">€2,400</span><span class="tier-price-period" data-i18n="mem.perYear">/year</span></div>
-        <ul class="tier-features">
-          <li data-i18n="mem.classic.f1">Member directory access</li>
-          <li data-i18n="mem.classic.f2">Auction participation</li>
-          <li data-i18n="mem.classic.f3">Virtual events</li>
-          <li data-i18n="mem.classic.f4">Encrypted messaging</li>
-          <li data-i18n="mem.classic.f5">AI matching — basic</li>
-        </ul>
-        <button class="btn btn-ghost btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.apply">Apply Now</button>
-      </div>
-      <!-- Premier -->
-      <div class="tier-card tier-featured">
-        <div class="tier-badge" data-i18n="mem.popular">Most Popular</div>
-        <div class="tier-name" data-i18n="mem.premier.name">Premier</div>
-        <div class="tier-price"><span class="tier-price-amt">€8,500</span><span class="tier-price-period" data-i18n="mem.perYear">/year</span></div>
-        <ul class="tier-features">
-          <li data-i18n="mem.premier.f1">Everything in Classic</li>
-          <li data-i18n="mem.premier.f2">In-person events &amp; dinners</li>
-          <li data-i18n="mem.premier.f3">Personal concierge</li>
-          <li data-i18n="mem.premier.f4">AI matching — advanced</li>
-          <li data-i18n="mem.premier.f5">Priority auction access</li>
-        </ul>
-        <button class="btn btn-gold btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.apply">Apply Now</button>
-      </div>
-      <!-- Private -->
-      <div class="tier-card">
-        <div class="tier-name" data-i18n="mem.private.name">Private</div>
-        <div class="tier-price"><span class="tier-price-amt" data-i18n="mem.private.price">By invitation</span></div>
-        <ul class="tier-features">
-          <li data-i18n="mem.private.f1">Everything in Premier</li>
-          <li data-i18n="mem.private.f2">Encrypted deal rooms</li>
-          <li data-i18n="mem.private.f3">Document vault &amp; e-sign</li>
-          <li data-i18n="mem.private.f4">Dedicated relationship manager</li>
-          <li data-i18n="mem.private.f5">Sovereign &amp; family office network</li>
-        </ul>
-        <button class="btn btn-ghost btn-block" onclick="document.getElementById('applicationForm').scrollIntoView({behavior:'smooth'});playClick()" data-i18n="mem.inquire">Inquire</button>
-      </div>
-    </div>
-
-    <!-- Application Form -->
-    <div id="applicationForm" class="application-form-wrap">
-      <h2 class="section-title" style="margin-bottom:2rem" data-i18n="mem.form.title">Begin Your Application</h2>
-      <div class="application-form">
-        <div class="form-row">
-          <div class="form-group"><label class="form-label" data-i18n="mem.form.firstName">First Name</label><input type="text" id="appFirstName" autocomplete="given-name"></div>
-          <div class="form-group"><label class="form-label" data-i18n="mem.form.lastName">Last Name</label><input type="text" id="appLastName" autocomplete="family-name"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" data-i18n="mem.form.tier">Membership Tier</label>
-          <select id="appTier" class="form-select">
-            <option value="classic" data-i18n="mem.classic.name">Classic</option>
-            <option value="premier" selected data-i18n="mem.premier.name">Premier</option>
-            <option value="private" data-i18n="mem.private.name">Private</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label" data-i18n="mem.form.country">Country of Residence</label><input type="text" id="appCountry" autocomplete="country-name"></div>
-        <button class="btn btn-gold btn-block" onclick="advanceOnboarding()" data-i18n="mem.form.submit">Submit Application</button>
-        <p class="modal-note" style="margin-top:1rem" data-i18n="mem.form.note">All applications are reviewed within 5 business days. Strict confidentiality guaranteed.</p>
-      </div>
-    </div>
-  </div>
-</div><!-- /page-membership -->
-
-<!-- ──────────────── AUCTIONS PAGE ──────────────── -->
-<div id="page-auctions" class="page">
-  <div class="page-hero">
-    <div class="section-eyebrow" data-i18n="auction.eyebrow">Live Bidding</div>
-    <h1 class="page-title" data-i18n="auction.title">Private Auctions</h1>
-    <p class="page-subtitle" data-i18n="auction.subtitle">Rare assets. Verified sellers. Absolute discretion.</p>
-  </div>
-  <div class="section-inner">
-    <div class="auction-filters">
-      <button class="auction-filter-btn active" onclick="filterAuctions('all',this)" data-i18n="auction.filter.all">All</button>
-      <button class="auction-filter-btn" onclick="filterAuctions('art',this)" data-i18n="auction.filter.art">Art</button>
-      <button class="auction-filter-btn" onclick="filterAuctions('watch',this)" data-i18n="auction.filter.watches">Watches</button>
-      <button class="auction-filter-btn" onclick="filterAuctions('yacht',this)" data-i18n="auction.filter.yachts">Yachts</button>
-      <button class="auction-filter-btn" onclick="filterAuctions('estate',this)" data-i18n="auction.filter.estates">Estates</button>
-    </div>
-    <div class="auction-grid" id="auctionGrid"></div>
-  </div>
-</div><!-- /page-auctions -->
-
-<!-- ──────────────── EVENTS PAGE ──────────────── -->
-<div id="page-events" class="page">
-  <div class="page-hero">
-    <div class="section-eyebrow" data-i18n="events.eyebrow">Exclusive Calendar</div>
-    <h1 class="page-title" data-i18n="events.title">Private Events</h1>
-    <p class="page-subtitle" data-i18n="events.subtitle">Summits, dinners, masterclasses, and roundtables — by invitation.</p>
-  </div>
-  <div class="section-inner">
-    <div class="events-layout">
-      <div class="events-list" id="eventsList"></div>
-      <div class="events-calendar">
-        <div class="mini-cal-header">
-          <button class="btn btn-ghost btn-sm" onclick="changeMonth(-1)">&#8249;</button>
-          <div id="calMonthTitle" style="font-family:var(--font-display);font-size:1rem;color:var(--gold)"></div>
-          <button class="btn btn-ghost btn-sm" onclick="changeMonth(1)">&#8250;</button>
-        </div>
-        <div class="mini-cal-grid" id="calGrid"></div>
-      </div>
-    </div>
-  </div>
-</div><!-- /page-events -->
-
-<!-- ──────────────── DASHBOARD PAGE ──────────────── -->
-<div id="page-dashboard" class="page">
-  <div class="dashboard-layout">
-
-    <!-- Sidebar -->
-    <aside class="dashboard-sidebar" role="complementary" aria-label="Member sidebar">
-      <div class="sidebar-profile">
-        <div class="sidebar-avatar" id="sidebarAvatar">👤</div>
-        <div class="sidebar-name" id="sidebarName">Member</div>
-        <div class="sidebar-tier"><span class="badge badge-gold">Premier</span></div>
-      </div>
-      <nav class="sidebar-nav" aria-label="Dashboard navigation">
-        <a class="sidebar-link active" onclick="showDashView('overview',this);playClick()" data-i18n="dash.overview">Overview</a>
-        <a class="sidebar-link" onclick="showDashView('network',this);playClick()" data-i18n="dash.network">Network</a>
-        <a class="sidebar-link" onclick="showDashView('dealrooms',this);playClick()" data-i18n="dash.dealrooms">Deal Rooms</a>
-        <a class="sidebar-link" onclick="showDashView('vault',this);playClick()" data-i18n="dash.vault">Vault</a>
-        <a class="sidebar-link" onclick="showDashView('matching',this);playClick()" data-i18n="dash.matching">Matching</a>
-        <a class="sidebar-link" onclick="showDashView('settings',this);playClick()" data-i18n="dash.settings">Settings</a>
-        <a class="sidebar-link" onclick="handleLogout();playClick()" style="color:var(--silver-dim);margin-top:auto" data-i18n="dash.logout">Sign Out</a>
-      </nav>
-    </aside>
-
-    <!-- Main dashboard area -->
-    <div class="dashboard-main">
-
-      <!-- Overview -->
-      <div id="dash-view-overview">
-        <h2 class="dash-greeting" id="dashGreeting">Good evening, Member.</h2>
-        <div class="dash-stats-row">
-          <div class="dash-stat-card"><div class="dash-stat-val" id="notifBadge" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">3</div><div class="dash-stat-label" data-i18n="dash.notifications">Notifications</div></div>
-          <div class="dash-stat-card"><div class="dash-stat-val" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">2</div><div class="dash-stat-label" data-i18n="dash.activeBids">Active Bids</div></div>
-          <div class="dash-stat-card"><div class="dash-stat-val" style="color:var(--gold);font-family:var(--font-display);font-size:1.8rem">5</div><div class="dash-stat-label" data-i18n="dash.newMatches">New Matches</div></div>
-        </div>
-        <div class="dash-grid">
-          <div class="dash-card">
-            <div class="dash-card-title" data-i18n="dash.activity">Recent Activity</div>
-            <div id="activityFeed"></div>
-          </div>
-          <div class="dash-card">
-            <div class="dash-card-title" data-i18n="dash.topMatches">Top Matches</div>
-            <div id="matchesList"></div>
-          </div>
-          <div class="dash-card">
-            <div class="dash-card-title" data-i18n="dash.activeBidsTitle">Active Bids</div>
-            <div id="activeBidsList"></div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:1rem;width:100%" onclick="showPage('auctions');playClick()" data-i18n="dash.viewAuctions">View All Auctions</button>
-          </div>
-          <div class="dash-card">
-            <div class="dash-card-title" data-i18n="dash.profilePhoto">Profile Photo</div>
-            <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
-              <img id="photoPreview" src="" alt="Profile photo preview" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;border:2px solid rgba(212,175,55,.3)">
-              <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-                <span data-i18n="dash.uploadPhoto">Upload Photo</span>
-                <input type="file" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)">
-              </label>
-              <div id="uploadProgress" style="display:none;width:100%">
-                <div style="background:rgba(212,175,55,.1);border-radius:4px;height:4px;overflow:hidden">
-                  <div id="uploadProgressBar" style="height:100%;background:var(--gold);width:0%;transition:width .2s"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Network -->
-      <div id="dash-view-network" style="display:none">
-        <h2 class="dash-section-title" data-i18n="dash.network">Network</h2>
-        <div class="dash-card">
-          <div class="dash-card-title" data-i18n="dash.memberDirectory">Member Directory</div>
-          <p style="color:var(--silver-dim);font-size:.85rem" data-i18n="dash.networkDesc">Your AI-matched network appears here. Profiles are anonymised until mutual connection.</p>
-        </div>
-      </div>
-
-      <!-- Deal Rooms -->
-      <div id="dash-view-dealrooms" style="display:none">
-        <h2 class="dash-section-title" data-i18n="dash.dealrooms">Deal Rooms</h2>
-        <div class="dash-card" style="text-align:center;padding:3rem">
-          <div style="font-size:3rem;margin-bottom:1rem">🔐</div>
-          <p data-i18n="dash.dealroomsPrivate">Deal rooms are available for Private Tier members.</p>
-          <button class="btn btn-gold" style="margin-top:1.5rem" onclick="showPage('membership');playClick()" data-i18n="dash.upgrade">Upgrade to Private</button>
-        </div>
-      </div>
-
-      <!-- Vault -->
-      <div id="dash-view-vault" style="display:none">
-        <h2 class="dash-section-title" data-i18n="dash.vault">Document Vault</h2>
-        <div class="dash-card" style="text-align:center;padding:3rem">
-          <div style="font-size:3rem;margin-bottom:1rem">🗄️</div>
-          <p data-i18n="dash.vaultPrivate">The document vault is available for Private Tier members.</p>
-          <button class="btn btn-gold" style="margin-top:1.5rem" onclick="showPage('membership');playClick()" data-i18n="dash.upgrade">Upgrade to Private</button>
-        </div>
-      </div>
-
-      <!-- Matching -->
-      <div id="dash-view-matching" style="display:none">
-        <h2 class="dash-section-title" data-i18n="dash.matching">AI Matching</h2>
-        <div class="dash-card">
-          <div class="dash-card-title" data-i18n="dash.topMatches">Top Matches</div>
-          <div id="matchesList3"></div>
-        </div>
-      </div>
-
-      <!-- Settings -->
-      <div id="dash-view-settings" style="display:none">
-        <h2 class="dash-section-title" data-i18n="dash.settings">Settings</h2>
-        <div class="dash-card">
-          <div class="dash-card-title" data-i18n="dash.account">Account</div>
-          <div style="display:flex;flex-direction:column;gap:1rem">
-            <button class="btn btn-ghost" onclick="playClick()" data-i18n="dash.changePassword">Change Password</button>
-            <button class="btn btn-ghost" onclick="playClick()" data-i18n="dash.notificationPrefs">Notification Preferences</button>
-            <button class="btn btn-ghost" style="color:var(--danger)" onclick="handleLogout();playClick()" data-i18n="dash.logout">Sign Out</button>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /dashboard-main -->
-  </div><!-- /dashboard-layout -->
-</div><!-- /page-dashboard -->
-
-<!-- ──────────────── MESSAGES PAGE ──────────────── -->
-<div id="page-messages" class="page">
-  <div class="messages-layout">
-    <div class="message-list" role="list" aria-label="Conversations">
-      <div class="message-list-header" data-i18n="messages.title">Messages</div>
-      <div id="messageListItems"></div>
-    </div>
-    <div class="chat-panel">
-      <div class="chat-header">
-        <div class="chat-name" id="chatName">E. Hoffmann</div>
-        <button class="btn btn-ghost btn-sm" onclick="showCuratorModal();playClick()" data-i18n="messages.curator">Contact Curator</button>
-      </div>
-      <div class="chat-area" id="chatArea" role="log" aria-live="polite"></div>
-      <div class="chat-input-row">
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…" onkeydown="handleChatKey(event)"></textarea>
-        <button class="btn btn-gold btn-sm" onclick="sendMessage();playClick()" data-i18n="messages.send">Send</button>
-      </div>
-    </div>
-  </div>
-</div><!-- /page-messages -->
-
-<!-- ──────────────── CONCIERGE PAGE ──────────────── -->
-<div id="page-concierge" class="page">
-  <div class="page-hero">
-    <div class="section-eyebrow" data-i18n="concierge.eyebrow">24/7 Service</div>
-    <h1 class="page-title" data-i18n="concierge.title">Your Personal Concierge</h1>
-    <p class="page-subtitle" data-i18n="concierge.subtitle">Whatever you need. Wherever you are.</p>
-  </div>
-  <div class="section-inner">
-    <div class="concierge-layout">
-      <div class="dash-card">
-        <div class="dash-card-title" data-i18n="concierge.form.category">Select a Category</div>
-        <div class="concierge-categories" id="conciergeCategories"></div>
-        <div class="form-group" style="margin-top:1.5rem">
-          <label class="form-label" data-i18n="concierge.form.request">Your Request</label>
-          <textarea id="concRequest" rows="4" style="width:100%;background:var(--navy-light);border:1px solid rgba(212,175,55,.15);border-radius:var(--r-sm);padding:.75rem;color:var(--white);font-family:var(--font-body);resize:vertical" placeholder="Describe your request in detail…"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" data-i18n="concierge.form.urgency">Urgency</label>
-          <select id="concUrgency" class="form-select">
-            <option value="standard" data-i18n="concierge.form.standard">Standard (24–48h)</option>
-            <option value="priority" data-i18n="concierge.form.priority">Priority (4–8h)</option>
-            <option value="emergency" data-i18n="concierge.form.emergency">Emergency (1h)</option>
-          </select>
-        </div>
-        <button class="btn btn-gold btn-block" onclick="submitConcierge()" data-i18n="concierge.form.submit">Submit Request</button>
-      </div>
-    </div>
-  </div>
-</div><!-- /page-concierge -->
-
-<!-- ──────────────── LOGIN PAGE ──────────────── -->
-<div id="page-login" class="page">
-  <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-logo">X<span>·</span>Club</div>
-      <h2 class="auth-title" data-i18n="auth.login.title">Welcome back</h2>
-      <p class="auth-sub" data-i18n="auth.login.sub">Sign in to your X Club account</p>
-      <div class="auth-form">
-        <div class="form-group"><label class="form-label" for="loginEmail" data-i18n="auth.login.email">Email</label><input type="email" id="loginEmail" autocomplete="email"></div>
-        <div class="form-group"><label class="form-label" for="loginPassword" data-i18n="auth.login.password">Password</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
-        <button class="btn btn-gold btn-block" id="loginBtn" onclick="handleLogin(event)" data-i18n="auth.login.btn">Sign In</button>
-        <div class="auth-divider"><span>or</span></div>
-        <button class="btn btn-ghost btn-block" onclick="handleGoogleLogin()" data-i18n="auth.login.google">Continue with Google</button>
-        <div style="text-align:center"><a onclick="showPage('reset');playClick()" style="font-size:.78rem;color:var(--silver-dim);cursor:pointer" data-i18n="auth.login.forgot">Forgot password?</a></div>
-      </div>
-      <div class="auth-switch"><span data-i18n="auth.login.noAccount">Not a member yet?</span> <a onclick="showPage('register');playClick()" data-i18n="auth.login.apply">Apply</a></div>
-    </div>
-  </div>
-</div><!-- /page-login -->
-
-<!-- ──────────────── REGISTER PAGE ──────────────── -->
-<div id="page-register" class="page">
-  <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-logo">X<span>·</span>Club</div>
-      <h2 class="auth-title" data-i18n="auth.register.title">Create Account</h2>
-      <p class="auth-sub" data-i18n="auth.register.sub">Begin your X Club journey</p>
-      <div class="auth-form">
-        <div class="form-group"><label class="form-label" for="regName" data-i18n="auth.register.name">Full Name</label><input type="text" id="regName" autocomplete="name"></div>
-        <div class="form-group"><label class="form-label" for="regEmail" data-i18n="auth.login.email">Email</label><input type="email" id="regEmail" autocomplete="email"></div>
-        <div class="form-group"><label class="form-label" for="regPassword" data-i18n="auth.login.password">Password</label><input type="password" id="regPassword" autocomplete="new-password" placeholder="At least 8 characters"></div>
-        <button class="btn btn-gold btn-block" id="regBtn" onclick="handleRegister(event)" data-i18n="auth.register.btn">Create Account</button>
-        <div class="auth-divider"><span>or</span></div>
-        <button class="btn btn-ghost btn-block" onclick="handleGoogleLogin()" data-i18n="auth.login.google">Continue with Google</button>
-      </div>
-      <div class="auth-switch"><span data-i18n="auth.register.have">Already a member?</span> <a onclick="showPage('login');playClick()" data-i18n="auth.register.signin">Sign In</a></div>
-    </div>
-  </div>
-</div><!-- /page-register -->
-
-<!-- ──────────────── RESET PASSWORD PAGE ──────────────── -->
-<div id="page-reset" class="page">
-  <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-logo">X<span>·</span>Club</div>
-      <h2 class="auth-title" data-i18n="auth.reset.title">Reset Password</h2>
-      <p class="auth-sub" data-i18n="auth.reset.sub">Enter your email to receive a reset link</p>
-      <div class="auth-form">
-        <div class="form-group"><label class="form-label" for="resetEmail" data-i18n="auth.login.email">Email</label><input type="email" id="resetEmail" autocomplete="email"></div>
-        <button class="btn btn-gold btn-block" onclick="handleForgotPassword()" data-i18n="auth.reset.btn">Send Reset Link</button>
-        <div style="text-align:center"><a onclick="showPage('login');playClick()" style="font-size:.78rem;color:var(--silver-dim);cursor:pointer" data-i18n="auth.reset.back">Back to Sign In</a></div>
-      </div>
-    </div>
-  </div>
-</div><!-- /page-reset -->
-
-</main><!-- /main-content -->
-
-<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
-
-<!-- Bid Modal -->
-<div id="bidModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="bidModalTitle">
-  <div class="modal">
-    <button class="modal-close" onclick="closeBidModal()" aria-label="Close">✕</button>
-    <span class="badge badge-gold" id="bidItemBadge" style="margin-bottom:.75rem">Fine Art</span>
-    <h3 class="modal-title" id="bidModalTitle" data-i18n="auction.bidNow">Place a Bid</h3>
-    <p class="modal-subtitle" id="bidModalDesc"></p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
-      <div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--silver-dim);margin-bottom:.3rem" data-i18n="bid.currentBid">Current Bid</div><div style="font-family:var(--font-display);font-size:1.6rem;color:var(--gold)" id="bidCurrentAmt">$0</div></div>
-      <div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--silver-dim);margin-bottom:.3rem" data-i18n="bid.timeLeft">Time Remaining</div><div style="font-size:1rem;font-weight:500" id="bidTimeLeft">—</div></div>
-    </div>
-    <div class="modal-form">
-      <div class="form-group"><label class="form-label" for="bidAmount" data-i18n="bid.yourBid">Your Bid (USD)</label><input type="number" id="bidAmount" placeholder="0" min="0" step="10000"><span style="font-size:.68rem;color:var(--silver-dim);margin-top:.3rem" data-i18n="bid.minBid">Minimum increment: $10,000</span></div>
-      <div class="form-group"><label class="form-label" for="proxyBid" data-i18n="bid.proxyBid">Proxy Bid / Max Bid (optional)</label><input type="number" id="proxyBid" placeholder="0" min="0" step="10000"><span style="font-size:.68rem;color:var(--silver-dim);margin-top:.3rem" data-i18n="bid.proxyHelper">We'll bid automatically up to your maximum.</span></div>
-      <p class="modal-note" data-i18n="bid.privacyNote">All transactions are conducted exclusively through X Club.</p>
-      <div style="display:flex;gap:.75rem">
-        <button class="btn btn-ghost" style="flex:1" onclick="closeBidModal()" data-i18n="bid.cancel">Cancel</button>
-        <button class="btn btn-gold" style="flex:1" onclick="placeBid()" data-i18n="bid.place">Place Bid</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Curator Modal -->
-<div id="curatorModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="curatorModalTitle">
-  <div class="modal">
-    <button class="modal-close" onclick="closeCuratorModal()" aria-label="Close">✕</button>
-    <h3 class="modal-title" id="curatorModalTitle" data-i18n="curator.title">Contact Your Curator</h3>
-    <p class="modal-subtitle" data-i18n="curator.subtitle">Our curators assist you personally — by phone, video call, or message.</p>
-    <div style="display:flex;flex-direction:column;gap:.75rem">
-      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.callBtn">Request a Call</button>
-      <button class="btn btn-ghost btn-block" onclick="playClick()" data-i18n="curator.videoBtn">Schedule Video Call</button>
-      <button class="btn btn-ghost btn-block" onclick="closeCuratorModal();showPage('messages');playClick()" data-i18n="curator.msgBtn">Send a Message</button>
+<!-- EDIT PROFILE MODAL -->
+<div class="modal-overlay" id="editProfileModal" onclick="if(event.target===this)closeModal('editProfileModal')">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-close" onclick="closeModal('editProfileModal')">✕</div>
+      <h2>Edit Profile</h2>
+      <button class="btn btn-primary btn-sm" onclick="saveProfile()" style="margin-left:auto">Save</button>
     </div>
-    <p class="modal-note" style="margin-top:1.25rem" data-i18n="curator.hours">Available Mon–Fri, 8:00–20:00 CET. Emergency assistance 24/7 for Private members.</p>
-  </div>
-</div>
-
-<!-- Privacy Violation Modal -->
-<div id="privacyModal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="privacyModalTitle">
-  <div class="modal">
-    <h3 class="modal-title" id="privacyModalTitle" data-i18n="privacyModal.title">Privacy Notice</h3>
-    <p class="modal-subtitle" data-i18n="privacyModal.desc">It appears you are attempting to share personal contact information. This violates the membership agreement.</p>
-    <div class="privacy-modal-warning" data-i18n="privacyModal.warning">A violation may result in immediate suspension.</div>
-    <button class="btn btn-gold btn-block" onclick="closePrivacyModal()" data-i18n="privacyModal.understood">Understood — Keep my message private</button>
-  </div>
-</div>
-
-<!-- Application Success Modal -->
-<div id="successModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="successModalTitle">
-  <div class="modal" style="text-align:center">
-    <div style="font-size:3rem;margin-bottom:1rem">✦</div>
-    <h3 class="modal-title" id="successModalTitle" data-i18n="success.title">Application Received</h3>
-    <p class="modal-subtitle" data-i18n="success.desc">Thank you for your application. It will be carefully reviewed. You will receive a response within 5 business days.</p>
-    <span class="badge badge-gold" style="margin-bottom:1.25rem" data-i18n="success.badge">Reference: XC-2025-04811</span>
-    <button class="btn btn-gold btn-block" onclick="closeSuccessModal();showPage('home')" data-i18n="success.btn">Return to X Club</button>
-  </div>
-</div>
-
-<!-- Push Notification Permission Modal -->
-<div id="pushModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pushModalTitle">
-  <div class="modal" style="text-align:center">
-    <div style="font-size:2.5rem;margin-bottom:.75rem;color:var(--gold);font-family:var(--font-display)">◈</div>
-    <h3 class="modal-title" id="pushModalTitle" data-i18n="push.title">Stay Informed</h3>
-    <p class="modal-subtitle" data-i18n="push.body">Enable notifications to receive bid updates, messages, and event reminders.</p>
-    <div style="display:flex;gap:.75rem;margin-top:.5rem">
-      <button class="btn btn-ghost" style="flex:1" onclick="skipPush()" data-i18n="push.skip">Not now</button>
-      <button class="btn btn-gold" style="flex:1" onclick="allowPush()" data-i18n="push.allow">Allow Notifications</button>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Display Name</label>
+        <input id="editDisplayName" class="form-input" type="text" placeholder="Your name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bio</label>
+        <textarea id="editBio" class="form-input" rows="3" placeholder="Tell people about yourself" style="resize:vertical"></textarea>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════ PWA INSTALL BANNER ═══════════════════ -->
-<div id="installBanner" role="complementary" aria-label="Install X Club">
-  <div style="font-size:1.2rem;color:var(--gold);font-family:var(--font-display);font-weight:300">X·C</div>
-  <div class="install-text">
-    <strong data-i18n="install.title">Install X Club</strong>
-    <span data-i18n="install.body">Add to your home screen for the best experience.</span>
+<!-- PAYWALL MODAL -->
+<div class="paywall-modal" id="paywallModal" onclick="if(event.target===this)closePaywall()">
+  <div class="paywall-card">
+    <div class="paywall-icon">✓</div>
+    <div class="paywall-title">Get Verified</div>
+    <div class="paywall-desc">Unlock full access to X Club — post, connect, message, and attend events</div>
+    <div class="paywall-price">€1,999</div>
+    <div class="paywall-price-sub">per year · cancel anytime</div>
+    <div class="paywall-features">
+      <div class="paywall-feature">Post updates, photos and events</div>
+      <div class="paywall-feature">Send connection requests</div>
+      <div class="paywall-feature">Private messaging with members</div>
+      <div class="paywall-feature">Access private events</div>
+      <div class="paywall-feature">Verified badge on your profile</div>
+      <div class="paywall-feature">Priority in discovery feed</div>
+    </div>
+    <button class="btn btn-accent btn-block btn-lg" onclick="initiatePayment()">Pay with Flutterwave</button>
+    <button class="btn btn-outline btn-block" onclick="closePaywall()" style="margin-top:10px">Maybe later</button>
   </div>
-  <button class="btn btn-gold btn-sm" onclick="promptInstall()" data-i18n="install.btn">Install</button>
-  <button class="btn btn-ghost btn-sm" onclick="dismissInstall()" data-i18n="install.dismiss">Dismiss</button>
 </div>
 
-<!-- ═══════════════════════════════ TOAST CONTAINER ══════════════════════ -->
-<div id="toastContainer" role="status" aria-live="polite" aria-atomic="false"></div>
-
-<!-- ═══════════════════════════════ ACCESSIBILITY PANEL ══════════════════ -->
-<button id="a11yBtn" aria-label="Accessibility options" aria-expanded="false" aria-controls="a11yPanel">Aa</button>
-<div id="a11yPanel" role="region" aria-label="Accessibility settings">
-  <div class="a11y-title" data-i18n="a11y.title">Accessibility</div>
-  <div class="a11y-row">
-    <span class="a11y-row-label" data-i18n="a11y.largerText">Larger Text</span>
-    <div class="toggle" id="largeFontToggle" onclick="toggleLargeFont()" role="switch" aria-checked="false" tabindex="0"></div>
-  </div>
-  <div class="a11y-row">
-    <span class="a11y-row-label" data-i18n="a11y.highContrast">High Contrast</span>
-    <div class="toggle" id="a11yContrastToggle" onclick="toggleContrast()" role="switch" aria-checked="false" tabindex="0"></div>
-  </div>
-  <div class="a11y-row">
-    <span class="a11y-row-label" data-i18n="a11y.sound">Sound Effects</span>
-    <div class="toggle on" id="a11ySoundToggle" onclick="toggleSound()" role="switch" aria-checked="true" tabindex="0"></div>
-  </div>
-  <button class="btn btn-ghost btn-sm btn-block" style="margin-top:.75rem" onclick="showCuratorModal();toggleA11yPanel()" data-i18n="a11y.needHelp">Need help? Call a Curator</button>
-</div>
-
-<!-- ═══════════════════════════════ SCRIPTS ══════════════════════════════ -->
+<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://checkout.flutterwave.com/v3.js"></script>
 <script src="firebase.js"></script>
-<script src="cloudinary.js"></script>
 <script src="app.js"></script>
+<script>
+// Extra small helpers wired to HTML
+async function sendReset() {
+  const email = document.getElementById('resetEmail').value.trim();
+  if (!email) return showToast('Enter your email');
+  try {
+    await window.XF.resetPw(email);
+    showToast('Reset link sent — check your inbox');
+    showPage('login');
+  } catch(err) {
+    showToast('Could not send reset link');
+  }
+}
+function switchFeedTab(tab, el) {
+  feedTab = tab;
+  document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed();
+}
+async function submitModalPost() {
+  const textarea = document.getElementById('modalPostText');
+  const text = textarea.value.trim();
+  if (!text) return showToast('Write something first');
+  if (!requireVerified('post')) return;
+  const btn = document.querySelector('#newPostModal .composer-submit');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try {
+    await window.XF.push('posts', {
+      authorUid: currentUser.uid,
+      text: text,
+      type: 'post',
+      createdAt: window.XF.ts(),
+      commentCount: 0,
+    });
+    textarea.value = '';
+    closeModal('newPostModal');
+    showToast('Posted!');
+    if (activePage === 'feed') renderFeed();
+  } catch(e) {
+    showToast('Failed to post');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Post';
+  }
+}
 
+// Populate composer avatar
+function updateComposerAvatar() {
+  const el = document.getElementById('composerAvatar');
+  if (el && currentProfile) {
+    el.outerHTML = avatarHTML(currentProfile, 'md').replace('<div class="avatar', '<div id="composerAvatar" class="avatar').replace('<img class="avatar', '<img id="composerAvatar" class="avatar');
+  }
+}
+
+// Load suggested members in sidebar
+async function loadSuggested() {
+  const c = document.getElementById('suggestedMembers');
+  if (!c || !window.XF) return;
+  try {
+    const snap = await window.XF.get('users');
+    const people = [];
+    if (snap.exists()) snap.forEach(s => { if (s.key !== (currentUser&&currentUser.uid)) people.push(s.val()); });
+    const shown = people.filter(p=>p.verified).slice(0,3).concat(people.filter(p=>!p.verified).slice(0,2));
+    if (shown.length === 0) { c.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">No members yet</div>'; return; }
+    c.innerHTML = shown.slice(0,4).map(p => `
+      <div class="sidebar-item" onclick="openUserProfile('${p.uid}', event)" style="display:flex;align-items:center;gap:10px">
+        ${avatarHTML(p,'sm')}
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:0.88rem;display:flex;align-items:center;gap:3px">${p.displayName||'Member'}${verifiedBadge(p.verified)}</div>
+          <div style="color:var(--text-dim);font-size:0.78rem">@${p.handle||'member'}</div>
+        </div>
+        ${p.uid !== (currentUser&&currentUser.uid) ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();sendConnectionRequest('${p.uid}')" style="font-size:0.75rem;padding:4px 10px">Connect</button>` : ''}
+      </div>`).join('');
+  } catch(e) {}
+}
+
+// Watch for notifications
+function startNotifWatch() {
+  if (!currentUser) return;
+  window.XF.on(`notifications/${currentUser.uid}`, snap => {
+    let unread = 0;
+    if (snap.exists()) snap.forEach(c => { if (!c.val().read) unread++; });
+    ['navNotifBadge','mobileNotifBadge'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) { b.textContent = unread; b.style.display = unread > 0 ? 'flex' : 'none'; }
+    });
+  });
+}
+
+// Override onAuthChange to also do extra setup
+const _origAuthChange = onAuthChange;
+window.onAuthChange = async function(user) {
+  await _origAuthChange(user);
+  if (user && currentProfile) {
+    updateComposerAvatar();
+    loadSuggested();
+    startNotifWatch();
+  }
+};
+// Re-wire firebase auth callback
+document.addEventListener('DOMContentLoaded', () => {});
+</script>
 </body>
 </html>
