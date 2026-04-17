@@ -18,7 +18,7 @@ en: {
   'hero.stat1':'Verified Members','hero.stat2':'Assets at Auction',
   'hero.stat3':'Countries Represented','hero.stat4':'Identity Verified',
   'hero.scrollCue':'Discover',
-  'features.eyebrow':'The Experience','features.title':'Everything you'd expect.\nNothing you'll find elsewhere.',
+  'features.eyebrow':'The Experience','features.title':'Everything you\'d expect.\nNothing you\'ll find elsewhere.',
   'features.subtitle':'A curated environment for those who have already succeeded.',
   'features.f1.title':'Military-Grade Privacy','features.f1.desc':'End-to-end encrypted communications. Zero third-party data sharing.',
   'features.f2.title':'AI-Powered Matching','features.f2.desc':'Our algorithm identifies co-investment opportunities and kindred individuals.',

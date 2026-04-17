@@ -4,13 +4,13 @@
 
 /* ── Firebase config (from config.js) ───────────────────────────────── */
 const FIREBASE_CONFIG = {
-  apiKey:            'AIzaSyDLPAktzLmpfNX9XUmw9i_B2P2I3XPwOLs',
-  authDomain:        'viccybank.firebaseapp.com',
-  databaseURL:       'https://viccybank-default-rtdb.firebaseio.com',
-  projectId:         'viccybank',
-  storageBucket:     'viccybank.firebasestorage.app',
-  messagingSenderId: '328465601734',
-  appId:             '1:328465601734:web:ae8d6bee3683be60629b32'
+  apiKey:            'AIzaSyCaG3mOPftbb4OwxL3qA4TZkZpife5SXbM',
+  authDomain:        'x-club-413fa.firebaseapp.com',
+  databaseURL:       'https://x-club-413fa-default-rtdb.europe-west1.firebasedatabase.app',
+  projectId:         'x-club-413fa',
+  storageBucket:     'x-club-413fa.firebasestorage.app',
+  messagingSenderId: '1035750007609',
+  appId:             '1:1035750007609:web:11ffcef313674785a77ee8'
 };
 
 /* ── DB path constants (all prefixed x_) ────────────────────────────── */
