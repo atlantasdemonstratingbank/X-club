@@ -25,7 +25,18 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 15px; scroll-behavior: smooth; }
+html {
+  font-size: 15px;
+  scroll-behavior: smooth;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent double-tap zoom on all interactive elements */
+button, a, input, textarea, select, [onclick], .nav-item, .mnav-item,
+.post-action, .btn, .tab, .admin-tab, .modal-close {
+  touch-action: manipulation;
+}
 
 body {
   font-family: var(--font);
@@ -101,7 +112,8 @@ img { max-width: 100%; }
 }
 .nav-link:hover { background: var(--bg-hover); }
 .nav-link.active { font-weight: 700; }
-.nav-link .nav-icon { font-size: 1.4rem; flex-shrink: 0; width: 26px; text-align: center; }
+.nav-link .nav-icon { font-size: 1.4rem; flex-shrink: 0; width: 26px; text-align: center; display:flex; align-items:center; justify-content:center; }
+.nav-link .nav-icon svg { display:block; }
 .nav-link .nav-badge {
   margin-left: auto;
   background: var(--accent); color: #fff;
@@ -204,12 +216,12 @@ img { max-width: 100%; }
   width: 18px; height: 18px;
   background: var(--verified);
   border-radius: 50%;
-  font-size: 0.65rem;
-  color: #fff;
   flex-shrink: 0;
   vertical-align: middle;
+  line-height: 1;
+  overflow: hidden;
 }
-.verified-badge.lg { width: 22px; height: 22px; font-size: 0.8rem; }
+.verified-badge.lg { width: 22px; height: 22px; }
 
 /* ══════════════════════════════════════════════
    POST COMPOSER
@@ -892,7 +904,8 @@ img { max-width: 100%; }
   position: relative;
 }
 .mobile-nav-link.active { color: var(--text); }
-.mobile-nav-link .mnav-icon { font-size: 1.4rem; }
+.mobile-nav-link .mnav-icon { font-size: 1.4rem; display:flex; align-items:center; justify-content:center; }
+.mobile-nav-link .mnav-icon svg { display:block; }
 .mobile-nav-badge {
   position: absolute; top: 2px; right: 8px;
   background: var(--accent); color: #fff;
@@ -1232,3 +1245,13 @@ img { max-width: 100%; }
   font-size: 0.9rem;
 }
 .req-banner-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Post date mode buttons ── */
+#optNow.active, #optBackdate.active, #optSchedule.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+#postDateRow input[type="datetime-local"] {
+  color-scheme: dark;
+}

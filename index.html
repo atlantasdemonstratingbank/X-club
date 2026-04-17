@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="X Club — The premium business social network">
-  <title>X Club</title>
+  <meta name="description" content="X Musk Club — The premium business social network">
+  <title>X Musk Club</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
 </head>
@@ -27,20 +27,20 @@
     <div class="nav-logo" onclick="showPage('feed')">✕</div>
     <div class="nav-links">
       <div class="nav-link" data-page="feed" onclick="showPage('feed')">
-        <span class="nav-icon">⌂</span><span>Home</span>
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Home</span>
       </div>
       <div class="nav-link" data-page="discover" onclick="showPage('discover')">
-        <span class="nav-icon">⌕</span><span>Discover</span>
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span>Discover</span>
       </div>
       <div class="nav-link" data-page="notifications" onclick="showPage('notifications')">
-        <span class="nav-icon">⍾</span><span>Notifications</span>
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span>Notifications</span>
         <span class="nav-badge" id="navNotifBadge" style="display:none">0</span>
       </div>
       <div class="nav-link" data-page="messages" onclick="showPage('messages')">
-        <span class="nav-icon">⊠</span><span>Messages</span>
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span>Messages</span>
       </div>
       <div class="nav-link" data-page="profile" onclick="showPage('profile')">
-        <span class="nav-icon">⊙</span><span>Profile</span>
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Profile</span>
       </div>
     </div>
 
@@ -64,7 +64,7 @@
       <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;">
         <div style="max-width:420px;width:100%;text-align:center">
           <div style="font-size:4rem;font-weight:900;margin-bottom:32px;letter-spacing:-0.04em">✕</div>
-          <h1 style="font-size:2.5rem;font-weight:900;margin-bottom:16px;letter-spacing:-0.02em">Happening now</h1>
+          <h1 style="font-size:2.5rem;font-weight:900;margin-bottom:16px;letter-spacing:-0.02em">X Musk Club</h1>
           <p style="color:var(--text-dim);font-size:1.1rem;margin-bottom:40px;line-height:1.5">The premium business social network. Build real connections. Verified members only.</p>
           <div style="display:flex;flex-direction:column;gap:12px">
             <button class="btn btn-primary btn-lg btn-block" onclick="showPage('register')">Create account</button>
@@ -83,7 +83,7 @@
       <div class="auth-page">
         <div class="auth-card">
           <div class="auth-logo">✕</div>
-          <div class="auth-title">Sign in to X Club</div>
+          <div class="auth-title">Sign in to X Musk Club</div>
           <form onsubmit="handleLogin(event)">
             <div class="form-group">
               <label class="form-label">Email</label>
@@ -115,7 +115,7 @@
       <div class="auth-page">
         <div class="auth-card">
           <div class="auth-logo">✕</div>
-          <div class="auth-title">Join X Club</div>
+          <div class="auth-title">Join X Musk Club</div>
           <div class="auth-sub">Create your account — free to join, verify to unlock everything</div>
           <form onsubmit="handleRegister(event)">
             <div class="form-group">
@@ -185,9 +185,9 @@
 
           <!-- Event toggle -->
           <div style="display:flex;gap:8px;margin-bottom:8px">
-            <button id="postTypePost" class="btn btn-outline btn-sm active" onclick="togglePostType('post')" style="font-size:0.78rem">◧ Post</button>
-            <button id="postTypeEvent" class="btn btn-outline btn-sm" onclick="togglePostType('event')" style="font-size:0.78rem">▦ Event</button>
-            <button id="postTypeBusiness" class="btn btn-outline btn-sm" onclick="togglePostType('business')" style="font-size:0.78rem">▣ Business</button>
+            <button id="postTypePost" class="btn btn-outline btn-sm active" onclick="togglePostType('post')" style="font-size:0.78rem">✎ Post</button>
+            <button id="postTypeEvent" class="btn btn-outline btn-sm" onclick="togglePostType('event')" style="font-size:0.78rem">◷ Event</button>
+            <button id="postTypeBusiness" class="btn btn-outline btn-sm" onclick="togglePostType('business')" style="font-size:0.78rem">$ Business</button>
           </div>
 
           <!-- Event fields -->
@@ -212,15 +212,43 @@
             <div class="form-group" style="margin-bottom:10px">
               <input id="bizTitle" class="form-input" placeholder="Business / Investment title" style="font-size:0.88rem">
             </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <select id="bizCurrency" class="form-input" style="font-size:0.85rem;flex:0 0 110px">
+                <option value="NGN">NGN — ₦</option>
+                <option value="USD">USD — $</option>
+                <option value="GBP">GBP — £</option>
+                <option value="EUR" selected>EUR — €</option>
+                <option value="GHS">GHS — ₵</option>
+                <option value="KES">KES — KSh</option>
+                <option value="ZAR">ZAR — R</option>
+                <option value="TZS">TZS — TSh</option>
+                <option value="UGX">UGX — USh</option>
+                <option value="RWF">RWF — RF</option>
+              </select>
+              <input id="bizTarget" class="form-input" type="number" placeholder="Funding target" style="font-size:0.88rem;flex:1" min="1">
+            </div>
             <div class="form-group" style="margin-bottom:10px">
-              <input id="bizTarget" class="form-input" type="number" placeholder="Funding target (€)" style="font-size:0.88rem" min="1">
+              <input id="bizSector" class="form-input" placeholder="Sector (e.g. Tech, Real Estate, Oil & Gas)" style="font-size:0.88rem">
             </div>
             <div class="form-group" style="margin-bottom:0">
-              <input id="bizSector" class="form-input" placeholder="Sector (e.g. Tech, Real Estate, Oil & Gas)" style="font-size:0.88rem">
+              <input id="bizEmail" class="form-input" type="email" placeholder="Your email (Flutterwave payments go here)" style="font-size:0.83rem">
             </div>
           </div>
 
           <div id="postImagePreview"></div>
+
+          <!-- Post timing options -->
+          <div style="margin-bottom:8px">
+            <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+              <button id="optNow" class="btn btn-outline btn-sm active" onclick="setPostDateMode('now')" style="font-size:0.74rem;padding:4px 10px">Now</button>
+              <button id="optBackdate" class="btn btn-outline btn-sm" onclick="setPostDateMode('backdate')" style="font-size:0.74rem;padding:4px 10px">◁ Backdate</button>
+              <button id="optSchedule" class="btn btn-outline btn-sm" onclick="setPostDateMode('schedule')" style="font-size:0.74rem;padding:4px 10px">◷ Schedule</button>
+            </div>
+            <div id="postDateRow" style="display:none">
+              <input id="postCustomDate" class="form-input" type="datetime-local" style="font-size:0.83rem;width:100%">
+              <div id="postDateHint" style="font-size:0.73rem;color:var(--text-dim);margin-top:4px"></div>
+            </div>
+          </div>
 
           <div class="composer-actions">
             <label class="composer-tool" title="Add image">
@@ -290,7 +318,7 @@
       <div class="admin-panel">
         <div class="admin-header">
           <div class="admin-header-logo">✕ ADMIN</div>
-          <div class="admin-header-title">X Club Control Panel</div>
+          <div class="admin-header-title">X Musk Club Control Panel</div>
           <button class="btn btn-outline btn-sm" onclick="handleLogout()" style="margin-left:auto">Sign out</button>
         </div>
         <div class="admin-tabs">
@@ -332,7 +360,7 @@
     <div class="search-bar">
       <div class="search-input-wrap">
         <span class="search-icon">⌕</span>
-        <input class="search-input" type="text" placeholder="Search X Club" oninput="searchUsers(this.value)">
+        <input class="search-input" type="text" placeholder="Search X Musk Club" oninput="searchUsers(this.value)">
       </div>
       <div id="searchResults" style="margin-top:8px"></div>
     </div>
@@ -353,7 +381,7 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-section-title">About X Club</div>
+      <div class="sidebar-section-title">About X Musk Club</div>
       <p style="font-size:0.83rem;color:var(--text-dim);line-height:1.5">
         The premium business social network. Verified members get full access to posts, events, messaging and deal rooms.
       </p>
@@ -369,20 +397,20 @@
 <nav class="mobile-nav">
   <div class="mobile-nav-links">
     <div class="mobile-nav-link" data-page="feed" onclick="showPage('feed')">
-      <span class="mnav-icon">⌂</span><span>Home</span>
+      <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Home</span>
     </div>
     <div class="mobile-nav-link" data-page="discover" onclick="showPage('discover')">
-      <span class="mnav-icon">⌕</span><span>Discover</span>
+      <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span>Discover</span>
     </div>
     <div class="mobile-nav-link" data-page="notifications" onclick="showPage('notifications')">
-      <span class="mnav-icon">⍾</span><span>Notifs</span>
+      <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span>Notifs</span>
       <span class="mobile-nav-badge" id="mobileNotifBadge" style="display:none">0</span>
     </div>
     <div class="mobile-nav-link" data-page="messages" onclick="showPage('messages')">
-      <span class="mnav-icon">⊠</span><span>Messages</span>
+      <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span>Messages</span>
     </div>
     <div class="mobile-nav-link" data-page="profile" onclick="showPage('profile')">
-      <span class="mnav-icon">⊙</span><span>Profile</span>
+      <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Profile</span>
     </div>
   </div>
 </nav>
@@ -446,7 +474,7 @@
   <div class="paywall-card">
     <div class="paywall-icon">✓</div>
     <div class="paywall-title">Get Verified</div>
-    <div class="paywall-desc">Unlock full access to X Club — post, connect, message, and attend events</div>
+    <div class="paywall-desc">Unlock full access to X Musk Club — post, connect, message, and attend events</div>
     <div class="paywall-price">€1,999</div>
     <div class="paywall-price-sub">per year · cancel anytime</div>
     <div class="paywall-features">

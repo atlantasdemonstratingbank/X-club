@@ -2,6 +2,52 @@
 'use strict';
 
 /* ══════════════════════════════════════════════
+   AI KEY — fetched once from Firebase config
+   In Firebase DB set:  config/groqKey = "gsk_..."
+   Get free key at: console.groq.com
+══════════════════════════════════════════════ */
+let _groqKey = null;
+async function getGroqKey() {
+  if (_groqKey) return _groqKey;
+  try {
+    const snap = await window.XF.get('config/groqKey');
+    if (snap.exists()) {
+      _groqKey = snap.val();
+      return _groqKey;
+    }
+  } catch(e) {}
+  console.warn('[AI] No Groq key found at Firebase config/groqKey');
+  return null;
+}
+
+async function callClaude({ system, user, maxTokens = 1024 }) {
+  const key = await getGroqKey();
+  if (!key) throw new Error('No Groq API key in Firebase (config/groqKey)');
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Groq API error: ${res.status} — ${err}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+
+/* ══════════════════════════════════════════════
    STATE
 ══════════════════════════════════════════════ */
 let currentUser   = null;
@@ -14,7 +60,46 @@ let msgUnsubscribe = null;
 
 const MEMBERSHIP_PRICE = 1999;
 const MEMBERSHIP_CURRENCY = 'EUR';
-const FLW_PUBLIC_KEY = 'FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
+// Flutterwave key — fetched from Firebase config/flwKey
+// Fallback is the test key; swap for live key in Firebase or admin panel
+let FLW_PUBLIC_KEY = 'FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
+async function loadFlwKey() {
+  try {
+    const snap = await window.XF.get('config/flwKey');
+    if (snap.exists() && snap.val()) FLW_PUBLIC_KEY = snap.val();
+  } catch(e) {}
+}
+/* ══════════════════════════════════════════════
+   HELPERS: currency symbol + Flutterwave
+══════════════════════════════════════════════ */
+function currencySymbol(code) {
+  const map = { NGN:'₦', USD:'$', GBP:'£', EUR:'€', GHS:'₵', KES:'KSh', ZAR:'R', TZS:'TSh', UGX:'USh', RWF:'RF' };
+  return map[code] || code || '€';
+}
+
+function launchFlutterwave(post, amount) {
+  const currency = post.bizCurrency || 'EUR';
+  const sym = currencySymbol(currency);
+  const name  = encodeURIComponent(currentProfile?.displayName || 'Investor');
+  const email = encodeURIComponent(currentUser?.email || '');
+  const title = encodeURIComponent(post.bizTitle || 'Investment');
+  const ref   = `xclub_${post.id}_${currentUser?.uid}_${Date.now()}`;
+
+  // Flutterwave inline/hosted checkout URL
+  const url = `https://checkout.flutterwave.com/v3/hosted/pay` +
+    `?public_key=${FLW_PUBLIC_KEY}` +
+    `&tx_ref=${ref}` +
+    `&amount=${amount}` +
+    `&currency=${currency}` +
+    `&customer_email=${email}` +
+    `&customer_name=${name}` +
+    `&customizations[title]=${title}` +
+    `&customizations[description]=${encodeURIComponent('Investment via X Musk Club')}` +
+    `&redirect_url=${encodeURIComponent(window.location.href)}`;
+
+  window.open(url, '_blank');
+}
+
 
 /* ══════════════════════════════════════════════
    HELPERS
@@ -44,7 +129,7 @@ function avatarHTML(profile, size='md') {
 function verifiedBadge(verified, lg=false) {
   if (!verified) return '';
   const cls = lg ? 'verified-badge lg' : 'verified-badge';
-  return '<span class="' + cls + '" title="Verified Member">&#10003;</span>';
+  return `<span class="${cls}" title="Verified Member"><svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 }
 function showToast(msg) {
   const c = $('toastContainer');
@@ -57,6 +142,14 @@ function showToast(msg) {
 }
 function requireVerified(action) {
   if (!currentUser) { showPage('login'); return false; }
+  // Messaging: allow unverified but enforce daily limit
+  if (action === 'messages' || action === 'dm') {
+    return true; // handled separately in sendDM
+  }
+  // Follow/connect: always allowed for logged-in users
+  if (action === 'connect with members' || action === 'follow') {
+    return true;
+  }
   if (!currentProfile || !currentProfile.verified) {
     showPaywall(action);
     return false;
@@ -918,7 +1011,6 @@ async function checkUnreadNotifications() {
    MESSAGES
 ══════════════════════════════════════════════ */
 async function renderConversations() {
-  if (!requireVerified('messages')) return;
   const container = $('convList');
   if (!container) return;
   container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
@@ -953,7 +1045,6 @@ async function renderConversations() {
 }
 
 async function openDMWith(uid) {
-  if (!requireVerified('messages')) return;
   if (activePage !== 'messages') showPage('messages');
   activeConvUid = uid;
   const snap = await window.XF.get(`users/${uid}`);
@@ -993,9 +1084,27 @@ async function openDMWith(uid) {
 }
 
 async function sendDM(toUid) {
+  if (!currentUser) return showPage('login');
   const input = $('chatInput');
   const text = input.value.trim();
   if (!text) return;
+
+  // Daily message limit for unverified users
+  if (!currentProfile || !currentProfile.verified) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const limitKey = `xclub_msg_${currentUser.uid}_${today}`;
+    const sentToday = parseInt(localStorage.getItem(limitKey) || '0');
+    const DAILY_LIMIT = 10;
+    if (sentToday >= DAILY_LIMIT) {
+      showToast(`Message limit reached — unverified members can send ${DAILY_LIMIT} messages/day`);
+      return;
+    }
+    localStorage.setItem(limitKey, String(sentToday + 1));
+    // Show remaining
+    const remaining = DAILY_LIMIT - sentToday - 1;
+    if (remaining <= 3) showToast(`${remaining} messages remaining today`);
+  }
+
   input.value = '';
   const convId = [currentUser.uid, toUid].sort().join('_');
   await window.XF.push(`dms/${convId}`, {
@@ -1089,11 +1198,24 @@ async function loadAdminUsers() {
   try {
     const snap = await window.XF.get('users');
     allUsersCache = [];
-    if (snap.exists()) snap.forEach(c => allUsersCache.push({ id: c.key, ...c.val() }));
+    if (snap.exists()) {
+      snap.forEach(c => {
+        const val = c.val();
+        // Include ALL users — Google, email/password, any auth method
+        // Ensure uid is always present (use key as fallback)
+        if (val && typeof val === 'object') {
+          allUsersCache.push({ id: c.key, uid: val.uid || c.key, ...val });
+        }
+      });
+    }
     allUsersCache.sort((a,b) => (b.joinedAt||0)-(a.joinedAt||0));
     renderAdminUsers(allUsersCache);
+    // Show count
+    const countEl = document.getElementById('adminUserCount');
+    if (countEl) countEl.textContent = allUsersCache.length + ' members';
   } catch(err) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load users</div></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load users — check Firebase rules</div></div>';
+    console.error('loadAdminUsers error:', err);
   }
 }
 
@@ -1220,7 +1342,7 @@ function businessPostHTML(post, author) {
             ${post.bizSector ? `<span style="font-size:0.75rem;color:var(--text-dim)">${post.bizSector}</span>` : ''}
           </div>
           <div class="post-invest-title">${escapeHTML(post.bizTitle || '')}</div>
-          <div class="post-invest-target">Target: €${Number(target).toLocaleString()}</div>
+          <div class="post-invest-target">Target: ${currencySymbol(post.bizCurrency)}${Number(target).toLocaleString()} ${post.bizCurrency||'EUR'}</div>
           <div class="invest-progress-bar">
             <div class="invest-progress-fill" style="width:${pct}%"></div>
           </div>
@@ -1228,7 +1350,7 @@ function businessPostHTML(post, author) {
             <span>${pct}% funded</span>
             <span>${post.investorCount || 0} investors</span>
           </div>
-          <div class="invest-raised">€${Number(raised).toLocaleString()} raised</div>
+          <div class="invest-raised">${currencySymbol(post.bizCurrency)}${Number(raised).toLocaleString()} raised</div>
           <div class="invest-actions" style="margin-top:12px">
             ${!isOwner ? `<div class="invest-btn" onclick="openInvestModal('${post.id}')">◈ Invest Now</div>` : ''}
             ${isOwner ? `<button class="invest-manage-btn" onclick="openManageInvest('${post.id}')">⊞ Manage Investment</button>` : ''}
@@ -1254,30 +1376,33 @@ async function openInvestModal(postId) {
   const raised = post.bizRaised || 0;
   const target = post.bizTarget || 1;
   const pct = Math.min(100, Math.round((raised / target) * 100));
+  const currency = post.bizCurrency || 'EUR';
+  const sym = currencySymbol(currency);
+  const isLargeCurrency = ['NGN','TZS','UGX','RWF'].includes(currency);
+  const amts = isLargeCurrency
+    ? [50000, 100000, 250000, 500000, 1000000, 2500000]
+    : [500, 1000, 2500, 5000, 10000, 25000];
 
   const body = document.getElementById('investModalBody');
   document.getElementById('investModalTitle').textContent = post.bizTitle || 'Invest';
   body.innerHTML = `
-    <div class="invest-modal-raised">€${Number(raised).toLocaleString()}</div>
-    <div class="invest-modal-target">raised of €${Number(target).toLocaleString()} target · ${pct}% funded</div>
+    <div class="invest-modal-raised">${sym}${Number(raised).toLocaleString()}</div>
+    <div class="invest-modal-target">raised of ${sym}${Number(target).toLocaleString()} target · ${pct}% funded</div>
     <div class="invest-progress-bar" style="margin-bottom:20px">
       <div class="invest-progress-fill" style="width:${pct}%"></div>
     </div>
-    <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:12px;font-weight:600">Choose an amount to invest:</div>
+    <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:12px;font-weight:600">Choose an amount (${currency}):</div>
     <div class="invest-amount-grid">
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 500)">€500</div>
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 1000)">€1,000</div>
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 2500)">€2,500</div>
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 5000)">€5,000</div>
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 10000)">€10,000</div>
-      <div class="invest-amount-btn" onclick="selectInvestAmount(this, 25000)">€25,000</div>
+      ${amts.map(a => `<div class="invest-amount-btn" onclick="selectInvestAmount(this,${a})">${sym}${a.toLocaleString()}</div>`).join('')}
     </div>
     <div class="form-group" style="margin-bottom:16px">
-      <input id="customInvestAmt" class="form-input" type="number" placeholder="Or enter custom amount (€)" min="1">
+      <input id="customInvestAmt" class="form-input" type="number" placeholder="Or enter custom amount (${currency})" min="1">
     </div>
-    <button class="btn btn-primary btn-block" onclick="confirmInvestment('${postId}')">Confirm Interest</button>
+    <button class="btn btn-primary btn-block" onclick="confirmInvestment('${postId}')">
+      Pay via Flutterwave →
+    </button>
     <div style="font-size:0.76rem;color:var(--text-muted);margin-top:12px;text-align:center;line-height:1.4">
-      This registers your investment interest. The post owner will contact you to finalise.
+      You'll be taken to Flutterwave's secure checkout to complete your payment.
     </div>`;
   document.getElementById('investModal').classList.add('open');
 }
@@ -1291,31 +1416,35 @@ function selectInvestAmount(el, amount) {
 }
 
 async function confirmInvestment(postId) {
-  const customVal = parseInt(document.getElementById('customInvestAmt').value);
+  const customVal = parseFloat(document.getElementById('customInvestAmt').value);
   const amount = customVal > 0 ? customVal : selectedInvestAmount;
   if (!amount || amount <= 0) return showToast('Please select or enter an amount');
 
+  // Fetch the post for currency + title info
+  const snap = await window.XF.get(`posts/${postId}`);
+  if (!snap.exists()) return showToast('Post not found');
+  const post = { id: postId, ...snap.val() };
+  const currency = post.bizCurrency || 'EUR';
+  const sym = currencySymbol(currency);
+
+  // Record pending investment in Firebase (unconfirmed until payment)
   try {
-    // Record investor
     await window.XF.set(`investments/${postId}/${currentUser.uid}`, {
       uid: currentUser.uid,
       name: currentProfile.displayName,
+      email: currentUser.email,
       amount: amount,
+      currency: currency,
+      status: 'pending',
       createdAt: window.XF.ts(),
     });
-    // Update raised amount & investor count
-    const snap = await window.XF.get(`posts/${postId}`);
-    const post = snap.val();
-    const newRaised = (post.bizRaised || 0) + amount;
-    const newCount = (post.investorCount || 0) + 1;
-    await window.XF.update(`posts/${postId}`, { bizRaised: newRaised, investorCount: newCount });
+  } catch(e) { /* non-blocking */ }
 
-    closeModal('investModal');
-    showToast(`[OK] Investment of €${amount.toLocaleString()} registered!`);
-    renderFeed();
-  } catch(err) {
-    showToast('Could not register investment');
-  }
+  closeModal('investModal');
+  showToast(`Redirecting to payment — ${sym}${Number(amount).toLocaleString()} ${currency}`);
+
+  // Redirect to Flutterwave hosted checkout
+  setTimeout(() => launchFlutterwave(post, amount), 600);
 }
 
 async function openManageInvest(postId) {
@@ -1326,8 +1455,8 @@ async function openManageInvest(postId) {
   body.innerHTML = `
     <div style="margin-bottom:16px">
       <div style="font-size:0.85rem;color:var(--text-dim);margin-bottom:6px">Current amount raised</div>
-      <div style="font-size:2rem;font-weight:800;color:var(--success)">€${Number(post.bizRaised||0).toLocaleString()}</div>
-      <div style="font-size:0.8rem;color:var(--text-dim)">${post.investorCount||0} investors · target €${Number(post.bizTarget||0).toLocaleString()}</div>
+      <div style="font-size:2rem;font-weight:800;color:var(--success)">${currencySymbol(post.bizCurrency)}${Number(post.bizRaised||0).toLocaleString()} ${post.bizCurrency||'EUR'}</div>
+      <div style="font-size:0.8rem;color:var(--text-dim)">${post.investorCount||0} investors · target ${currencySymbol(post.bizCurrency)}${Number(post.bizTarget||0).toLocaleString()}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Set raised amount manually (€)</label>
@@ -1384,18 +1513,11 @@ async function loadBizFeed() {
   container.innerHTML = '<div class="bizfeed-loading"><div class="spinner"></div> Loading…</div>';
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: `You are a business intelligence service. Generate 4 short, realistic business/investment news snippets about current opportunities in oil & gas, emerging markets, tech, real estate, or global investments. Each should be 1-2 sentences max, feel like a real insider tip or news flash. Respond ONLY with a JSON array like: [{"tag":"oil","text":"..."},{"tag":"investment","text":"..."},{"tag":"tech","text":"..."},{"tag":"market","text":"..."}]. No markdown, no preamble. Tags must be one of: oil, investment, tech, market.`,
-        messages: [{ role: 'user', content: 'Generate 4 business news snippets for now.' }]
-      })
-    });
-    const data = await response.json();
-    const raw = data.content.map(i => i.text || '').join('');
+    const raw = await callClaude({
+      system: `You are a real-time business intelligence service for X Club. Search the web for current news then generate exactly 4 short snippets based on REAL stories happening now — oil & gas, emerging markets, tech, real estate, global finance. Each snippet: 1-2 sentences, insider alert tone. Respond ONLY with raw JSON — no markdown, no backticks, no preamble: [{"tag":"oil","text":"..."},{"tag":"investment","text":"..."},{"tag":"tech","text":"..."},{"tag":"market","text":"..."}] Tags: oil | investment | tech | market`,
+      user: "Search for today's top business news then generate 4 fresh real snippets.",
+      maxTokens: 1024,
+      });
     const clean = raw.replace(/```json|```/g, '').trim();
     const items = JSON.parse(clean);
 
@@ -1420,18 +1542,11 @@ async function loadBizFeed() {
 async function postClaudeEngineerToFeed() {
   // Post as Claude Engineer to the main Firebase feed
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
-        system: `You are Claude Engineer, a business intelligence bot on X Club — a premium business social network. Write a single engaging business post (2-3 sentences) about a real-world opportunity, market trend, or investment insight in oil & gas, tech, real estate, or emerging markets. Sound confident and professional. No hashtags. No emojis. Just sharp business insight. Respond with ONLY the post text, nothing else.`,
-        messages: [{ role: 'user', content: 'Write a business insight post.' }]
-      })
-    });
-    const data = await response.json();
-    const text = data.content.map(i => i.text || '').join('').trim();
+    const text = await callClaude({
+      system: `You are Claude Engineer, a business intelligence account on X Club. Write ONE sharp post (2-4 sentences) based on something real happening RIGHT NOW in business, finance, tech, oil & gas, real estate, or emerging markets. Search the web first. Confident, analytical, insider tone. No hashtags. No emojis. No date references. Respond with ONLY the post text.`,
+      user: "Search for today's top business or market news and write a sharp post about the most interesting story.",
+      maxTokens: 512,
+      });
     if (!text) return;
 
     await window.XF.push('posts', {
@@ -1461,7 +1576,7 @@ window.postHTML = function(post, author) {
         <div class="post-body">
           <div class="post-header">
             <span class="post-name">Claude Engineer</span>
-            <span class="verified-badge" title="Verified">&#10003;</span>
+            <span class="verified-badge" title="Verified"><svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%"><polyline points="2,6 5,9 10,3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             <span class="post-handle">@claudeengineer</span>
             <span class="post-time">· ${timeAgo(post.createdAt)}</span>
           </div>
@@ -1539,6 +1654,8 @@ window.submitPost = async function() {
       bizTitle: bizTitle,
       bizTarget: bizTarget,
       bizSector: bizSector,
+      bizCurrency: document.getElementById('bizCurrency')?.value || 'EUR',
+      bizEmail: document.getElementById('bizEmail')?.value.trim() || '',
       bizRaised: 0,
       investorCount: 0,
       createdAt: window.XF.ts(),
@@ -1552,6 +1669,7 @@ window.submitPost = async function() {
     document.getElementById('bizTitle').value = '';
     document.getElementById('bizTarget').value = '';
     document.getElementById('bizSector').value = '';
+    if (document.getElementById('bizEmail')) document.getElementById('bizEmail').value = '';
     window.togglePostType('post');
     showToast('Business post published!');
     renderFeed();
@@ -1654,19 +1772,65 @@ window.onAuthChange = async function(user) {
       showPage('admin');
       loadAdminUsers();
       hideLoader();
-      // Inject Claude Engineer post button into admin
-      setTimeout(() => {
+      // Inject admin tools into admin panel
+      setTimeout(async () => {
         const adminContent = document.getElementById('adminTabUsers');
         if (adminContent && !document.getElementById('cePostBtn')) {
+
+          // ── Groq Key Config ──
+          const currentGroqKey = await window.XF.get('config/groqKey').then(s => s.exists() ? s.val() : '').catch(() => '');
+          const currentFlwKey  = await window.XF.get('config/flwKey').then(s => s.exists() ? s.val() : '').catch(() => '');
+
+          const keyPanel = document.createElement('div');
+          keyPanel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm)';
+          keyPanel.innerHTML = `
+            <div style="font-weight:700;font-size:0.93rem;margin-bottom:10px">⚙ Platform Keys</div>
+
+            <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">AI — Groq Key</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+              <input id="groqKeyInput" class="form-input" type="password"
+                placeholder="Paste gsk_... key here"
+                value="${currentGroqKey ? '••••••••••••••••' : ''}"
+                style="flex:1;font-size:0.82rem"
+                onfocus="if(this.value.startsWith('•'))this.value=''"
+              >
+              <button class="btn btn-accent btn-sm" onclick="saveGroqKey()">Save</button>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px">
+              Free key from console.groq.com
+            </div>
+
+            <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">Flutterwave Public Key</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input id="flwKeyInput" class="form-input" type="password"
+                placeholder="FLWPUBK-live-..."
+                value="${currentFlwKey ? '••••••••••••••••' : ''}"
+                style="flex:1;font-size:0.82rem"
+                onfocus="if(this.value.startsWith('•'))this.value=''"
+              >
+              <button class="btn btn-accent btn-sm" onclick="saveFlwKey()">Save</button>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-dim)">
+              Test key = FLWPUBK-xxx-X · Live key = FLWPUBK-live-xxx · Get from dashboard.flutterwave.com → Settings → API Keys
+            </div>`;
+          adminContent.insertBefore(keyPanel, adminContent.firstChild);
+
+          // ── Claude Engineer Post Button ──
           const btn = document.createElement('div');
-          btn.style.cssText = 'margin-bottom:16px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px';
+          btn.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px';
           btn.innerHTML = `
             <div>
               <div style="font-weight:700;font-size:0.93rem">◈ Claude Engineer</div>
               <div style="font-size:0.78rem;color:var(--text-dim)">Post AI business insight to the main feed</div>
             </div>
             <button id="cePostBtn" class="btn btn-accent btn-sm" onclick="triggerClaudeEngineerPost()">Post Now</button>`;
-          adminContent.insertBefore(btn, adminContent.firstChild);
+          adminContent.insertBefore(btn, keyPanel.nextSibling);
+
+          // ── User count ──
+          const countBadge = document.createElement('div');
+          countBadge.id = 'adminUserCount';
+          countBadge.style.cssText = 'font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;padding:0 2px';
+          adminContent.insertBefore(countBadge, btn.nextSibling);
         }
       }, 300);
       return;
@@ -1682,6 +1846,7 @@ window.onAuthChange = async function(user) {
 
 // Init biz feed on page load (for sidebar even before login)
 document.addEventListener('DOMContentLoaded', () => {
+  loadFlwKey(); // fetch live/test FLW key from Firebase
   setTimeout(loadBizFeed, 3000);
 });
 
@@ -1691,4 +1856,275 @@ async function triggerClaudeEngineerPost() {
   await postClaudeEngineerToFeed();
   if (btn) { btn.disabled = false; btn.textContent = 'Post Now'; }
   showToast('[OK] Claude Engineer posted to feed!');
+}
+
+/* ══════════════════════════════════════════════
+   FEATURE: formatCount — 2000 → 2K, 1M, 1B
+══════════════════════════════════════════════ */
+function formatCount(n) {
+  n = Number(n) || 0;
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000)         return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+}
+
+// Patch all follower/following count renders to use formatCount
+const _patchProfileHTML = (html) =>
+  html.replace(/(<strong>)(\d+)(<\/strong> <span>Followers)/g, (_, a, n, c) => `${a}${formatCount(n)}${c}`)
+      .replace(/(<strong>)(\d+)(<\/strong> <span>Following)/g, (_, a, n, c) => `${a}${formatCount(n)}${c}`);
+
+// Intercept renderOwnProfile and renderUserProfile to format counts
+const _origRenderOwn2 = window.renderOwnProfile;
+window.renderOwnProfile = async function() {
+  await _origRenderOwn2();
+  // reformat counts shown in DOM
+  document.querySelectorAll('.profile-stat strong').forEach(el => {
+    const raw = parseInt(el.textContent);
+    if (!isNaN(raw) && raw >= 1000) el.textContent = formatCount(raw);
+  });
+};
+
+const _origRenderUser2 = window.renderUserProfile;
+window.renderUserProfile = async function(uid) {
+  await _origRenderUser2(uid);
+  document.querySelectorAll('.profile-stat strong').forEach(el => {
+    const raw = parseInt(el.textContent);
+    if (!isNaN(raw) && raw >= 1000) el.textContent = formatCount(raw);
+  });
+};
+
+/* ══════════════════════════════════════════════
+   FEATURE: Post date mode — Now / Backdate / Schedule
+══════════════════════════════════════════════ */
+let _postDateMode = 'now'; // 'now' | 'backdate' | 'schedule'
+
+function setPostDateMode(mode) {
+  _postDateMode = mode;
+  ['now','backdate','schedule'].forEach(m => {
+    const btn = document.getElementById('opt' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  const row = document.getElementById('postDateRow');
+  const hint = document.getElementById('postDateHint');
+  const input = document.getElementById('postCustomDate');
+  if (!row) return;
+  if (mode === 'now') {
+    row.style.display = 'none';
+  } else {
+    row.style.display = 'block';
+    if (mode === 'backdate') {
+      // Allow any past date back to 2000
+      input.max = new Date().toISOString().slice(0,16);
+      input.removeAttribute('min');
+      if (hint) hint.textContent = 'Post will appear with this historical date (back to 2000)';
+    } else {
+      // Schedule: future only
+      input.min = new Date().toISOString().slice(0,16);
+      input.removeAttribute('max');
+      if (hint) hint.textContent = 'Post will go live automatically at this date & time';
+    }
+  }
+}
+
+// Get the resolved timestamp for the post
+function resolvePostTimestamp() {
+  if (_postDateMode === 'now') return Date.now();
+  const input = document.getElementById('postCustomDate');
+  if (!input || !input.value) return Date.now();
+  const ts = new Date(input.value).getTime();
+  if (isNaN(ts)) return Date.now();
+  return ts;
+}
+
+// Patch submitPost to use custom timestamp + handle scheduling
+const _origSubmitPost2 = window.submitPost;
+window.submitPost = async function() {
+  if (_postDateMode === 'schedule') {
+    const ts = resolvePostTimestamp();
+    if (ts <= Date.now()) {
+      showToast('Please pick a future date for scheduling');
+      return;
+    }
+    // Save as scheduled post in Firebase
+    await _saveScheduledPost(ts);
+    return;
+  }
+  // For now/backdate: let original submitPost run, but override XF.ts()
+  const _origTs = window.XF.ts;
+  if (_postDateMode === 'backdate') {
+    const ts = resolvePostTimestamp();
+    window.XF.ts = () => ts;
+  }
+  await _origSubmitPost2();
+  window.XF.ts = _origTs || window.XF.ts;
+  // Reset to now mode
+  setPostDateMode('now');
+  const input = document.getElementById('postCustomDate');
+  if (input) input.value = '';
+};
+
+async function _saveScheduledPost(fireAt) {
+  if (!currentUser) return;
+  const textarea = document.getElementById('postText');
+  const text = textarea ? textarea.value.trim() : '';
+  if (!text) { showToast('Write something first'); return; }
+  const post = {
+    text,
+    uid: currentUser.uid,
+    displayName: currentProfile.displayName,
+    handle: currentProfile.handle || '',
+    avatar: currentProfile.avatar || null,
+    verified: currentProfile.verified || false,
+    fireAt,
+    createdAt: Date.now(),
+    status: 'scheduled'
+  };
+  await window.XF.push('scheduledPosts', post);
+  if (textarea) textarea.value = '';
+  setPostDateMode('now');
+  showToast('◷ Post scheduled for ' + new Date(fireAt).toLocaleString());
+}
+
+/* ══════════════════════════════════════════════
+   FEATURE: Scheduled post runner
+   Checks every 60s — fires any due scheduled posts
+══════════════════════════════════════════════ */
+async function runScheduledPosts() {
+  if (!currentUser) return;
+  try {
+    const snap = await window.XF.get('scheduledPosts');
+    if (!snap.exists()) return;
+    const all = snap.val();
+    const now = Date.now();
+    for (const [key, post] of Object.entries(all)) {
+      if (post.status === 'scheduled' && post.fireAt <= now && post.uid === currentUser.uid) {
+        // Publish it
+        const published = { ...post, createdAt: post.fireAt, status: undefined, fireAt: undefined };
+        delete published.status;
+        delete published.fireAt;
+        await window.XF.push('posts', published);
+        await window.XF.set(`scheduledPosts/${key}/status`, 'published');
+        showToast('◷ Scheduled post published!');
+      }
+    }
+  } catch(e) { /* silent */ }
+}
+
+// Run immediately and then every 60s
+setInterval(runScheduledPosts, 60_000);
+document.addEventListener('DOMContentLoaded', () => setTimeout(runScheduledPosts, 5000));
+
+/* ══════════════════════════════════════════════
+   FEATURE: AI Auto-Posting (Claude Engineer)
+   Posts every 4 hours automatically
+══════════════════════════════════════════════ */
+const AI_AUTO_POST_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const AI_AUTO_POST_KEY = 'xclub_ai_last_post';
+
+async function maybeAutoPostClaude() {
+  try {
+    const lastStr = localStorage.getItem(AI_AUTO_POST_KEY);
+    const last = lastStr ? parseInt(lastStr) : 0;
+    const now = Date.now();
+    if (now - last < AI_AUTO_POST_INTERVAL_MS) return; // not time yet
+    localStorage.setItem(AI_AUTO_POST_KEY, String(now));
+    await postClaudeEngineerToFeed();
+    console.log('[AI Auto-Post] Claude Engineer posted at', new Date().toLocaleTimeString());
+  } catch(e) {
+    console.warn('[AI Auto-Post] failed:', e);
+  }
+}
+
+// Check on load and then every 30 min
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(maybeAutoPostClaude, 8000); // wait 8s after load
+  setInterval(maybeAutoPostClaude, 30 * 60 * 1000); // re-check every 30 min
+});
+
+
+/* ══════════════════════════════════════════════
+   FEATURE: Admin — view scheduled posts queue
+══════════════════════════════════════════════ */
+async function loadScheduledPostsAdmin() {
+  const container = document.getElementById('scheduledPostsList');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Loading…</div>';
+  try {
+    const snap = await window.XF.get('scheduledPosts');
+    if (!snap.exists()) { container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">No scheduled posts</div>'; return; }
+    const all = Object.entries(snap.val()).filter(([,p]) => p.status === 'scheduled');
+    if (!all.length) { container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">No pending scheduled posts</div>'; return; }
+    all.sort(([,a],[,b]) => a.fireAt - b.fireAt);
+    container.innerHTML = all.map(([key, p]) => `
+      <div style="padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;font-size:0.83rem">
+        <div style="font-weight:600;margin-bottom:4px">@${p.handle||'?'} · <span style="color:var(--accent)">◷ ${new Date(p.fireAt).toLocaleString()}</span></div>
+        <div style="color:var(--text-dim);margin-bottom:6px">${p.text}</div>
+        <button class="btn btn-outline btn-sm" style="font-size:0.75rem;color:var(--danger)" onclick="cancelScheduled('${key}')">Cancel</button>
+      </div>`).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Could not load</div>';
+  }
+}
+
+async function cancelScheduled(key) {
+  await window.XF.set(`scheduledPosts/${key}/status`, 'cancelled');
+  showToast('Scheduled post cancelled');
+  loadScheduledPostsAdmin();
+}
+
+// Inject scheduled posts panel into admin tab
+const _origSwitchAdminTab = window.switchAdminTab;
+window.switchAdminTab = function(tab, el) {
+  _origSwitchAdminTab && _origSwitchAdminTab(tab, el);
+  if (tab === 'stats') {
+    setTimeout(() => {
+      const statsTab = document.getElementById('adminTabStats');
+      if (statsTab && !document.getElementById('scheduledPostsList')) {
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-top:20px';
+        section.innerHTML = `
+          <div class="admin-section-title" style="margin-bottom:10px">◷ Scheduled Posts Queue</div>
+          <div id="scheduledPostsList"></div>`;
+        statsTab.appendChild(section);
+        loadScheduledPostsAdmin();
+      }
+    }, 100);
+  }
+};
+
+/* ══════════════════════════════════════════════
+   ADMIN: Save Groq key to Firebase
+══════════════════════════════════════════════ */
+async function saveGroqKey() {
+  const input = document.getElementById('groqKeyInput');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val || val.startsWith('•')) { showToast('Paste your Groq key first'); return; }
+  if (!val.startsWith('gsk_')) { showToast('Invalid key — Groq keys start with gsk_'); return; }
+  try {
+    await window.XF.set('config/groqKey', val);
+    _groqKey = val;
+    input.value = '••••••••••••••••';
+    showToast('[OK] Groq key saved to Firebase');
+  } catch(e) {
+    showToast('Failed to save key — check Firebase rules');
+  }
+}
+
+async function saveFlwKey() {
+  const input = document.getElementById('flwKeyInput');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val || val.startsWith('•')) { showToast('Paste your Flutterwave key first'); return; }
+  if (!val.startsWith('FLWPUBK')) { showToast('Invalid key — must start with FLWPUBK'); return; }
+  try {
+    await window.XF.set('config/flwKey', val);
+    FLW_PUBLIC_KEY = val; // update in memory immediately
+    input.value = '••••••••••••••••';
+    const isLive = val.includes('live');
+    showToast(`[OK] Flutterwave ${isLive ? 'LIVE' : 'test'} key saved`);
+  } catch(e) {
+    showToast('Failed to save key — check Firebase rules');
+  }
 }
