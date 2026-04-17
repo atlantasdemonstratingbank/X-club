@@ -1,16 +1,6 @@
 /* app.js — X Club Main Application Logic */
 'use strict';
 
-/* ── Loader removal — inline style override required ── */
-function removeLoader() {
-  const loader = document.getElementById('appLoader');
-  if (!loader) return;
-  loader.style.opacity = '0';
-  loader.style.pointerEvents = 'none';
-  loader.style.display = 'none'; // must override inline style
-  setTimeout(() => { if (loader.parentNode) loader.parentNode.removeChild(loader); }, 400);
-}
-
 /* ══════════════════════════════════════════════════
    TRANSLATIONS  (437 keys across EN / PT / ES / DE)
 ══════════════════════════════════════════════════ */
@@ -548,12 +538,12 @@ function friendlyAuthError(code) {
 
 function onAuthStateChange(user) {
   currentUser = user;
-  const loader = document.getElementById('appLoader');
+  
 
   if (user) {
     /* Signed in */
     updateNavForUser(user);
-    removeLoader();
+    
 
     /* Subscribe to notifications */
     if (_notifUnsubscribe) _notifUnsubscribe();
@@ -576,7 +566,7 @@ function onAuthStateChange(user) {
   } else {
     /* Not signed in */
     updateNavForGuest();
-    removeLoader();
+    
     const urlPage = new URLSearchParams(location.search).get('page');
     if (urlPage && ['login','register','home','membership'].includes(urlPage)) showPage(urlPage);
     else showPage('home');
@@ -1270,33 +1260,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPWA();
   initParticles();
 
-  /* Loader safety net — if auth never fires within 6s, force-show home */
-  const _loaderTimeout = setTimeout(() => {
-    const loader = document.getElementById('appLoader');
-    if (loader) {
-      console.warn('[XClub] Loader timeout — forcing home page');
-      removeLoader();
-      updateNavForGuest();
-      showPage('home');
-      applyT(); renderAll();
-    }
-  }, 3000);
-
   /* Load Firebase */
   try {
-    await Promise.race([
-      window.XFire.load(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 4000))
-    ]);
+    await window.XFire.load();
     window.XFire.onAuthChange(user => {
-      clearTimeout(_loaderTimeout);
+      if (window.removeAppLoader) window.removeAppLoader();
       onAuthStateChange(user);
     });
   } catch(err) {
-    clearTimeout(_loaderTimeout);
     console.error('[XClub] Firebase failed to load:', err);
-    const loader = document.getElementById('appLoader');
-    removeLoader();
+    if (window.removeAppLoader) window.removeAppLoader();
     showPage('home');
     applyT(); renderAll(); initParticles();
   }
