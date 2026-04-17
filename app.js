@@ -283,7 +283,7 @@ function initiatePayment() {
           });
           currentProfile.verified = true;
           closePaywall();
-          showToast('🎉 You are now a verified member!');
+          showToast('✦ You are now a verified member!');
           updateNavUser();
         } catch(err) {
           showToast('Payment confirmed but profile update failed — contact support');
@@ -315,7 +315,7 @@ async function renderFeed() {
     if (posts.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">📰</div>
+          <div class="empty-state-icon">◪</div>
           <div class="empty-state-title">Nothing here yet</div>
           <div class="empty-state-desc">Be the first to post something</div>
         </div>`;
@@ -350,13 +350,13 @@ function postHTML(post, author) {
     mediaHTML += `
       <div class="post-event-card">
         <span class="post-event-badge ${post.eventPrivate ? 'badge-private' : 'badge-public'}">
-          ${post.eventPrivate ? '🔒 Private Event' : '🌐 Open Event'}
+          ${post.eventPrivate ? '⊘ Private Event' : '◯ Open Event'}
         </span>
         <div class="post-event-title">${post.eventTitle || ''}</div>
         <div class="post-event-meta">
-          ${post.eventDate ? `<span>📅 ${post.eventDate}</span>` : ''}
-          ${post.eventTime ? `<span>🕐 ${post.eventTime}</span>` : ''}
-          ${post.eventLocation ? `<span>📍 ${post.eventLocation}</span>` : ''}
+          ${post.eventDate ? `<span>▦ ${post.eventDate}</span>` : ''}
+          ${post.eventTime ? `<span>◷ ${post.eventTime}</span>` : ''}
+          ${post.eventLocation ? `<span>◉ ${post.eventLocation}</span>` : ''}
         </div>
       </div>`;
   }
@@ -377,13 +377,13 @@ function postHTML(post, author) {
         ${mediaHTML}
         <div class="post-actions" onclick="event.stopPropagation()">
           <div class="post-action comment" onclick="openPost('${post.id}', event)">
-            <span>💬</span> ${commentCount > 0 ? commentCount : ''}
+            <span>◈</span> ${commentCount > 0 ? commentCount : ''}
           </div>
           <div class="post-action like ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">
-            <span>${isLiked ? '❤️' : '🤍'}</span> ${likeCount > 0 ? likeCount : ''}
+            <span>${isLiked ? '♥' : '♡'}</span> ${likeCount > 0 ? likeCount : ''}
           </div>
           <div class="post-action share" onclick="sharePost('${post.id}')">
-            <span>🔗</span>
+            <span>⛓</span>
           </div>
         </div>
       </div>
@@ -507,14 +507,14 @@ async function toggleLike(postId, el) {
   if (snap.exists()) {
     await window.XF.remove(`posts/${postId}/likes/${uid}`);
     el.classList.remove('liked');
-    el.querySelector('span').textContent = '🤍';
+    el.querySelector('span').textContent = '♡';
     const c = parseInt(el.textContent.replace(/\D/g,'')) || 1;
-    el.innerHTML = `<span>🤍</span> ${c > 1 ? c-1 : ''}`;
+    el.innerHTML = `<span>♡</span> ${c > 1 ? c-1 : ''}`;
   } else {
     await window.XF.set(`posts/${postId}/likes/${uid}`, true);
     el.classList.add('liked');
     const c = parseInt(el.textContent.replace(/\D/g,'')) || 0;
-    el.innerHTML = `<span>❤️</span> ${c+1}`;
+    el.innerHTML = `<span>♥</span> ${c+1}`;
   }
 }
 
@@ -617,7 +617,7 @@ async function renderDiscover() {
     if (snap.exists()) snap.forEach(c => { if (c.key !== (currentUser && currentUser.uid)) people.push(c.val()); });
 
     if (people.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">👥</div><div class="empty-state-title">No members yet</div></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⊛</div><div class="empty-state-title">No members yet</div></div>`;
       return;
     }
 
@@ -859,7 +859,7 @@ async function renderNotifications() {
   notifs.sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
 
   if (notifs.length === 0) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔔</div><div class="empty-state-title">No notifications yet</div></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⍾</div><div class="empty-state-title">No notifications yet</div></div>`;
     return;
   }
 
@@ -867,7 +867,7 @@ async function renderNotifications() {
     if (n.type === 'connection_request') {
       return `
         <div class="notif-item ${n.read?'':'unread'}">
-          <div class="notif-icon">👤</div>
+          <div class="notif-icon">⊙</div>
           <div style="flex:1">
             <div class="notif-text"><strong>${n.fromName}</strong> wants to connect with you</div>
             <div class="notif-time">${timeAgo(n.createdAt)}</div>
@@ -881,7 +881,7 @@ async function renderNotifications() {
     if (n.type === 'connection_accepted') {
       return `
         <div class="notif-item ${n.read?'':'unread'}">
-          <div class="notif-icon">🤝</div>
+          <div class="notif-icon">⊕</div>
           <div style="flex:1">
             <div class="notif-text"><strong>${n.fromName}</strong> accepted your connection request</div>
             <div class="notif-time">${timeAgo(n.createdAt)}</div>
@@ -890,7 +890,7 @@ async function renderNotifications() {
     }
     return `
       <div class="notif-item ${n.read?'':'unread'}">
-        <div class="notif-icon">🔔</div>
+        <div class="notif-icon">⍾</div>
         <div style="flex:1">
           <div class="notif-text">${n.text || 'New notification'}</div>
           <div class="notif-time">${timeAgo(n.createdAt)}</div>
@@ -926,7 +926,7 @@ async function renderConversations() {
   // Get all connections
   const connSnap = await window.XF.get(`connections/${currentUser.uid}`);
   if (!connSnap.exists()) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">💬</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>`;
     return;
   }
 
@@ -1216,7 +1216,7 @@ function businessPostHTML(post, author) {
         <div class="post-text">${escapeHTML(post.text || '')}</div>
         <div class="post-invest-card">
           <div class="post-invest-header">
-            <span class="post-invest-badge">💼 INVESTMENT OPPORTUNITY</span>
+            <span class="post-invest-badge">▣ INVESTMENT OPPORTUNITY</span>
             ${post.bizSector ? `<span style="font-size:0.75rem;color:var(--text-dim)">${post.bizSector}</span>` : ''}
           </div>
           <div class="post-invest-title">${escapeHTML(post.bizTitle || '')}</div>
@@ -1230,16 +1230,16 @@ function businessPostHTML(post, author) {
           </div>
           <div class="invest-raised">€${Number(raised).toLocaleString()} raised</div>
           <div class="invest-actions" style="margin-top:12px">
-            ${!isOwner ? `<div class="invest-btn" onclick="openInvestModal('${post.id}')">💸 Invest Now</div>` : ''}
-            ${isOwner ? `<button class="invest-manage-btn" onclick="openManageInvest('${post.id}')">⚙️ Manage Investment</button>` : ''}
+            ${!isOwner ? `<div class="invest-btn" onclick="openInvestModal('${post.id}')">◈ Invest Now</div>` : ''}
+            ${isOwner ? `<button class="invest-manage-btn" onclick="openManageInvest('${post.id}')">⊞ Manage Investment</button>` : ''}
           </div>
         </div>
         <div class="post-actions" onclick="event.stopPropagation()">
           <div class="post-action like ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">
-            <span>${isLiked ? '❤️' : '🤍'}</span> ${likeCount > 0 ? likeCount : ''}
+            <span>${isLiked ? '♥' : '♡'}</span> ${likeCount > 0 ? likeCount : ''}
           </div>
           <div class="post-action share" onclick="sharePost('${post.id}')">
-            <span>🔗</span>
+            <span>⛓</span>
           </div>
         </div>
       </div>
@@ -1311,7 +1311,7 @@ async function confirmInvestment(postId) {
     await window.XF.update(`posts/${postId}`, { bizRaised: newRaised, investorCount: newCount });
 
     closeModal('investModal');
-    showToast(`✅ Investment of €${amount.toLocaleString()} registered!`);
+    showToast(`[OK] Investment of €${amount.toLocaleString()} registered!`);
     renderFeed();
   } catch(err) {
     showToast('Could not register investment');
@@ -1468,13 +1468,13 @@ window.postHTML = function(post, author) {
           <div class="post-text">${escapeHTML(post.text || '')}</div>
           <div class="post-actions" onclick="event.stopPropagation()">
             <div class="post-action comment" onclick="openPost('${post.id}', event)">
-              <span>💬</span> ${commentCount > 0 ? commentCount : ''}
+              <span>◈</span> ${commentCount > 0 ? commentCount : ''}
             </div>
             <div class="post-action like ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">
-              <span>${isLiked ? '❤️' : '🤍'}</span> ${likeCount > 0 ? likeCount : ''}
+              <span>${isLiked ? '♥' : '♡'}</span> ${likeCount > 0 ? likeCount : ''}
             </div>
             <div class="post-action share" onclick="sharePost('${post.id}')">
-              <span>🔗</span>
+              <span>⛓</span>
             </div>
           </div>
         </div>
@@ -1577,7 +1577,7 @@ window.renderFeed = async function() {
     posts.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
     if (posts.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📰</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>`;
       return;
     }
 
@@ -1612,7 +1612,7 @@ window.renderOwnProfile = async function() {
   toggleDiv.className = 'privacy-toggle-row';
   const followersVisible = !currentProfile.followersHidden;
   toggleDiv.innerHTML = `
-    <span class="privacy-toggle-label">👥 Show my followers publicly</span>
+    <span class="privacy-toggle-label">⊛ Show my followers publicly</span>
     <label class="toggle-switch">
       <input type="checkbox" ${followersVisible ? 'checked' : ''} onchange="toggleFollowersPrivacy(this.checked)">
       <div class="toggle-track"></div>
@@ -1634,7 +1634,7 @@ window.renderUserProfile = async function(uid) {
     if (statsEl) {
       const followerStat = statsEl.querySelector('.profile-stat');
       if (followerStat) {
-        followerStat.innerHTML = '<strong>🔒</strong> <span>Hidden</span>';
+        followerStat.innerHTML = '<strong>⊘</strong> <span>Hidden</span>';
       }
     }
   }
@@ -1662,7 +1662,7 @@ window.onAuthChange = async function(user) {
           btn.style.cssText = 'margin-bottom:16px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px';
           btn.innerHTML = `
             <div>
-              <div style="font-weight:700;font-size:0.93rem">🤖 Claude Engineer</div>
+              <div style="font-weight:700;font-size:0.93rem">◈ Claude Engineer</div>
               <div style="font-size:0.78rem;color:var(--text-dim)">Post AI business insight to the main feed</div>
             </div>
             <button id="cePostBtn" class="btn btn-accent btn-sm" onclick="triggerClaudeEngineerPost()">Post Now</button>`;
@@ -1690,5 +1690,5 @@ async function triggerClaudeEngineerPost() {
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
   await postClaudeEngineerToFeed();
   if (btn) { btn.disabled = false; btn.textContent = 'Post Now'; }
-  showToast('✅ Claude Engineer posted to feed!');
+  showToast('[OK] Claude Engineer posted to feed!');
 }
