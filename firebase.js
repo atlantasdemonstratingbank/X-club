@@ -42,6 +42,7 @@ async function loadFirebase() {
     remove: (path)             => _db.ref(path).remove(),
     on:     (path, cb)         => { _db.ref(path).on('value', cb); return () => _db.ref(path).off('value', cb); },
     ts:     ()                 => firebase.database.ServerValue.TIMESTAMP,
+    multiUpdate: (updates)     => _db.ref().update(updates),
   };
 }
 

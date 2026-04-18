@@ -223,12 +223,20 @@ async function onAuthChange(user){
     const snap=await window.XF.get('users/'+user.uid);
     currentProfile=snap.exists()?snap.val():null;
     updateNavUser();updateComposerAvatar();loadSuggested();startNotifWatch();
-    if(['landing','login','register'].includes(activePage))showPage('feed');
-    else showPage(activePage);
+    updateSidebarVerifyBtn();
+    // Check for profile share deep-link first
+    const handled=checkProfileDeepLink();
+    if(!handled){
+      if(['landing','login','register'].includes(activePage))showPage('feed');
+      else showPage(activePage);
+    }
     setTimeout(loadBizFeed,1500);setTimeout(runScheduledPosts,5000);
     checkDeepLink();
   }else{
-    isAdmin=false;currentProfile=null;updateNavUser();showPage('landing');
+    isAdmin=false;currentProfile=null;updateNavUser();
+    updateSidebarVerifyBtn();
+    // Even logged-out users can see shared profiles
+    if(!checkProfileDeepLink())showPage('landing');
   }
   hideLoader();
 }
@@ -712,6 +720,10 @@ async function renderOwnProfile(){
         </div>
         <div style="display:flex;gap:8px;padding-top:12px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="showEditProfile()">Edit profile</button>
+          <button class="btn btn-outline btn-sm" onclick="shareProfile()" title="Share profile">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share
+          </button>
           ${!currentProfile.verified?`<button class="btn btn-accent btn-sm" onclick="showPaywall()">✓ Get Verified</button>`:''}
         </div>
       </div>
@@ -738,6 +750,10 @@ async function renderOwnProfile(){
     <div id="ownProfilePosts">
       ${posts.length===0?'<div class="empty-state"><div class="empty-state-desc">No posts yet — share something!</div></div>':posts.map(p=>p.type==='business'?businessPostHTML(p,currentProfile):postHTML(p,currentProfile)).join('')}
     </div>`;
+  // Make banner & avatar clickable to view full size
+  setTimeout(()=>makeProfilePhotosClickable(container,currentProfile),50);
+  // Show who viewed my profile
+  renderProfileViewers(currentUser.uid,container);
 }
 function switchOwnProfileTab(tab,el){
   document.querySelectorAll('#ownProfileContent .profile-tab').forEach(t=>t.classList.remove('active'));
@@ -832,7 +848,12 @@ async function renderUserProfile(uid){
           <div class="profile-avatar-wrap">${avatarHTML(profile,'xl')}</div>
           <div style="display:flex;gap:8px;padding-top:12px;flex-wrap:wrap">
             ${currentUser&&uid!==currentUser.uid?connectBtnHTML(uid,connStatus):''}
+            ${!currentUser?`<button class="btn btn-primary btn-sm" onclick="showPage('register')">Connect</button>`:''}
             ${connStatus==='connected'?`<button class="btn btn-outline btn-sm" onclick="openDMWith('${uid}')">Message</button>`:''}
+            <button class="btn btn-outline btn-sm" onclick="shareUserProfile('${uid}','${escapeHTML(profile.displayName||'Member')}','${escapeHTML(profile.handle||uid)}')" title="Share profile">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share
+            </button>
           </div>
         </div>
         <div class="profile-name">${escapeHTML(profile.displayName||'Member')}${verifiedBadge(profile.verified,true)}</div>
@@ -851,6 +872,12 @@ async function renderUserProfile(uid){
       <div id="userProfilePosts">
         ${posts.length===0?'<div class="empty-state"><div class="empty-state-desc">No posts yet</div></div>':posts.map(p=>p.type==='business'?businessPostHTML(p,profile):postHTML(p,profile)).join('')}
       </div>`;
+    // Record this user viewed the profile
+    recordProfileView(uid);
+    // Make profile photos clickable
+    setTimeout(()=>makeProfilePhotosClickable(container,profile),50);
+    // Render viewers strip
+    renderProfileViewers(uid,container);
   }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load profile</div></div>';}
 }
 function switchUserProfileTab(tab,el){
@@ -894,76 +921,96 @@ function startNotifWatch(){
 }
 
 /* ══════════════════════════════════════════════
-   MESSAGES  (fully fixed)
+   MESSAGES  (fully fixed — full-page DM)
 ══════════════════════════════════════════════ */
 async function renderConversations(){
   const container=$('convList');if(!container)return;
+  // Show list view, hide DM pane
+  const lv=$('messagesListView'),dp=$('dmFullpage');
+  if(lv)lv.style.display='block';
+  if(dp)dp.style.display='none';
   if(!currentUser){container.innerHTML='';return;}
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
-  const connSnap=await window.XF.get('connections/'+currentUser.uid);
-  if(!connSnap.exists()){
-    container.innerHTML=`<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>`;
-    return;
-  }
-  // Deduplicate UIDs
-  const connUids=[...new Set(Object.keys(connSnap.val()))];
-  const profiles={};
-  await Promise.all(connUids.map(async uid=>{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}));
-  // Get last message preview per conversation
-  const previews={};
-  await Promise.all(connUids.map(async uid=>{
-    const convId=[currentUser.uid,uid].sort().join('_');
-    const dmSnap=await window.XF.get('dms/'+convId);
-    if(dmSnap.exists()){const msgs=[];dmSnap.forEach(c=>msgs.push(c.val()));if(msgs.length>0)previews[uid]=msgs[msgs.length-1];}
-  }));
-  container.innerHTML=connUids.map(uid=>{
-    const p=profiles[uid];if(!p)return'';
-    const preview=previews[uid];const isActive=activeConvUid===uid;
-    return`<div class="conversation-item${isActive?' active':''}" onclick="openDMWith('${uid}')" data-uid="${uid}">
-      ${avatarHTML(p,'md')}
-      <div class="conv-info">
-        <div class="conv-name">${escapeHTML(p.displayName||'Member')}${verifiedBadge(p.verified)}</div>
-        <div class="conv-preview">${preview?escapeHTML(String(preview.text||'').slice(0,40)):'@'+escapeHTML(p.handle||'member')}</div>
-      </div>
-    </div>`;
-  }).filter(Boolean).join('');
+  try{
+    const connSnap=await window.XF.get('connections/'+currentUser.uid);
+    if(!connSnap.exists()||Object.keys(connSnap.val()).length===0){
+      container.innerHTML=`<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>`;return;
+    }
+    const uids=Object.keys(connSnap.val());
+    const profiles={};
+    await Promise.all(uids.map(async uid=>{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}));
+    const previews={};
+    await Promise.all(uids.map(async uid=>{
+      const convId=[currentUser.uid,uid].sort().join('_');
+      const dmSnap=await window.XF.get('dms/'+convId);
+      if(dmSnap.exists()){const msgs=[];dmSnap.forEach(c=>msgs.push(c.val()));if(msgs.length>0)previews[uid]=msgs[msgs.length-1];}
+    }));
+    container.innerHTML=uids.map(uid=>{
+      const p=profiles[uid];if(!p)return'';
+      const preview=previews[uid];
+      const previewText=preview?(preview.imageUrl?'📷 Photo':String(preview.text||'').slice(0,40)):'@'+escapeHTML(p.handle||'member');
+      return`<div class="conversation-item" onclick="openDMWith('${uid}')" data-uid="${uid}">
+        ${avatarHTML(p,'md')}
+        <div class="conv-info">
+          <div class="conv-name">${escapeHTML(p.displayName||'Member')}${verifiedBadge(p.verified)}</div>
+          <div class="conv-preview">${escapeHTML(previewText)}</div>
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+  }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';}
 }
 async function openDMWith(uid){
-  // Always unsubscribe old listener before opening new chat
   if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
   if(activePage!=='messages')showPage('messages');
   activeConvUid=uid;
-  // Highlight in list without full re-render
-  document.querySelectorAll('.conversation-item').forEach(el=>el.classList.toggle('active',el.dataset.uid===uid));
   const snap=await window.XF.get('users/'+uid);const partner=snap.exists()?snap.val():null;
-  const chatArea=$('chatArea');if(!chatArea)return;
-  chatArea.innerHTML=`
-    <div class="chat-header">
-      <div onclick="openUserProfile('${uid}',event)" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
-        ${avatarHTML(partner,'md')}
-        <div>
-          <div style="display:flex;align-items:center;gap:4px;font-weight:700">${escapeHTML(partner?.displayName||'Member')}${verifiedBadge(partner?.verified)}</div>
-          <div style="font-size:0.8rem;color:var(--text-dim)">@${escapeHTML(partner?.handle||'member')}</div>
-        </div>
+  // Show DM full-page, hide list
+  const lv=$('messagesListView'),dp=$('dmFullpage');
+  if(lv)lv.style.display='none';
+  if(!dp)return;
+  dp.style.display='flex';
+  // Render header
+  const hdr=$('dmFullpageHeader');
+  if(hdr)hdr.innerHTML=`
+    <div class="dm-back-btn" onclick="closeDMFullpage()">←</div>
+    <div onclick="openUserProfile('${uid}',event)" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
+      ${avatarHTML(partner,'md')}
+      <div>
+        <div style="display:flex;align-items:center;gap:4px;font-weight:700">${escapeHTML(partner?.displayName||'Member')}${verifiedBadge(partner?.verified)}</div>
+        <div style="font-size:0.8rem;color:var(--text-dim)">@${escapeHTML(partner?.handle||'member')}</div>
       </div>
-    </div>
-    <div id="chatMessages" class="chat-messages"></div>
-    <div class="chat-composer">
-      <input id="chatInput" class="chat-input" placeholder="Send a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDM('${uid}');}">
-      <button class="btn btn-accent" onclick="sendDM('${uid}')">Send</button>
     </div>`;
+  // Wire up send button uid
+  const dmInput=$('dmInput');if(dmInput){dmInput.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDMText(uid);}};}
+  const sendBtn=dp.querySelector('.dm-send-btn');if(sendBtn)sendBtn.onclick=()=>sendDMText(uid);
+  const imgInput=$('dmImgInput');if(imgInput)imgInput.onchange=function(){sendDMImage(this,uid);};
+  // Listen to messages
+  const msgEl=$('dmMessages');
   const convId=[currentUser.uid,uid].sort().join('_');
   msgUnsubscribe=window.XF.on('dms/'+convId,snap=>{
     const msgs=[];if(snap.exists())snap.forEach(c=>msgs.push({id:c.key,...c.val()}));
-    const el=$('chatMessages');if(!el)return;
-    if(msgs.length===0){el.innerHTML=`<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>`;return;}
-    el.innerHTML=msgs.map(m=>`<div class="chat-msg${m.senderUid===currentUser.uid?' me':' them'}">${escapeHTML(m.text||'')}</div>`).join('');
-    el.scrollTop=el.scrollHeight;
+    if(!msgEl)return;
+    if(msgs.length===0){msgEl.innerHTML=`<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>`;return;}
+    msgEl.innerHTML=msgs.map(m=>{
+      const isMe=m.senderUid===currentUser.uid;
+      const imgHTML=m.imageUrl?`<img src="${escapeHTML(m.imageUrl)}" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo">`:''
+      const txtHTML=m.text?`<span>${escapeHTML(m.text)}</span>`:'';
+      return`<div class="chat-msg${isMe?' me':' them'}">${imgHTML}${txtHTML}</div>`;
+    }).join('');
+    msgEl.scrollTop=msgEl.scrollHeight;
   });
 }
-async function sendDM(toUid){
-  if(!currentUser){showPage('login');return;}
-  const input=$('chatInput');const text=input.value.trim();if(!text)return;
+function closeDMFullpage(){
+  if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
+  activeConvUid=null;
+  const lv=$('messagesListView'),dp=$('dmFullpage');
+  if(dp)dp.style.display='none';
+  if(lv)lv.style.display='block';
+  renderConversations();
+}
+async function sendDMText(uid){
+  uid=uid||activeConvUid;if(!uid||!currentUser)return;
+  const input=$('dmInput');const text=input?.value?.trim();if(!text)return;
   if(!currentProfile?.verified){
     const today=new Date().toISOString().slice(0,10);
     const limitKey='xclub_msg_'+currentUser.uid+'_'+today;
@@ -973,13 +1020,21 @@ async function sendDM(toUid){
     localStorage.setItem(limitKey,String(sentToday+1));
     const remaining=DAILY_LIMIT-sentToday-1;if(remaining<=3)showToast(remaining+' free messages remaining today');
   }
-  input.value='';
-  const convId=[currentUser.uid,toUid].sort().join('_');
+  if(input)input.value='';
+  const convId=[currentUser.uid,uid].sort().join('_');
   await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts()});
-  // Update conversation list preview (only update text, not full re-render)
-  const previewEl=document.querySelector(`.conversation-item[data-uid="${toUid}"] .conv-preview`);
-  if(previewEl)previewEl.textContent=text.slice(0,40);
 }
+async function sendDMImage(inputEl,uid){
+  uid=uid||activeConvUid;if(!uid||!currentUser||!inputEl?.files?.[0])return;
+  showToast('Uploading image…');
+  try{
+    const r=await window.XCloud.upload(inputEl.files[0],'dm_images');
+    const convId=[currentUser.uid,uid].sort().join('_');
+    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,imageUrl:r.url,text:'',createdAt:window.XF.ts()});
+    inputEl.value='';
+  }catch(e){showToast('Image upload failed');}
+}
+async function sendDM(toUid){await sendDMText(toUid);}/* legacy alias */
 
 /* ══════════════════════════════════════════════
    BUSINESS / INVESTMENT POSTS
@@ -1110,8 +1165,10 @@ function closeModal(id){const m=$(id);if(m)m.classList.remove('open');}
 function switchAdminTab(tab,el){
   document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
   $('adminTabUsers').style.display=tab==='users'?'block':'none';
+  $('adminTabPosts').style.display=tab==='posts'?'block':'none';
   $('adminTabStats').style.display=tab==='stats'?'block':'none';
   if(tab==='stats'){loadAdminStats();loadScheduledPostsAdmin();}
+  if(tab==='posts'){adminLoadPosts();}
 }
 async function loadAdminUsers(){
   const container=$('adminUserList');if(!container)return;
@@ -1216,9 +1273,197 @@ async function sendReset(){
 }
 
 /* ══════════════════════════════════════════════
+   THEME TOGGLE (dark ↔ light/gold)
+══════════════════════════════════════════════ */
+function toggleTheme(){
+  const isLight=document.body.classList.toggle('theme-light');
+  localStorage.setItem('xclub_theme',isLight?'light':'dark');
+  const icon=$('themeToggleIcon');
+  if(icon)icon.textContent=isLight?'🌙':'☀';
+}
+function applyStoredTheme(){
+  const t=localStorage.getItem('xclub_theme');
+  if(t==='light'){document.body.classList.add('theme-light');const icon=$('themeToggleIcon');if(icon)icon.textContent='🌙';}
+}
+
+/* ══════════════════════════════════════════════
+   PHOTO LIGHTBOX
+══════════════════════════════════════════════ */
+function openLightbox(url){
+  if(!url)return;
+  const lb=document.createElement('div');lb.className='photo-lightbox';
+  lb.innerHTML=`<div class="photo-lightbox-close" onclick="this.parentElement.remove()">✕</div><img src="${escapeHTML(url)}" alt="Photo">`;
+  lb.onclick=function(e){if(e.target===lb)lb.remove();};
+  document.body.appendChild(lb);
+}
+
+/* ══════════════════════════════════════════════
+   SIDEBAR: hide Get Verified for verified members
+══════════════════════════════════════════════ */
+function updateSidebarVerifyBtn(){
+  const btn=$('sidebarVerifyBtn');if(!btn)return;
+  btn.style.display=(currentUser&&currentProfile?.verified)?'none':'block';
+}
+
+/* ══════════════════════════════════════════════
+   PROFILE VIEWERS (TikTok-style)
+══════════════════════════════════════════════ */
+async function recordProfileView(profileUid){
+  if(!currentUser||profileUid===currentUser.uid)return;
+  try{
+    await window.XF.set('profileViews/'+profileUid+'/'+currentUser.uid,{
+      uid:currentUser.uid,
+      displayName:currentProfile?.displayName||'Member',
+      handle:currentProfile?.handle||'member',
+      photoURL:currentProfile?.photoURL||'',
+      viewedAt:window.XF.ts()
+    });
+  }catch(e){}
+}
+async function renderProfileViewers(profileUid,containerEl){
+  if(!currentUser||profileUid!==currentUser.uid)return;
+  try{
+    const snap=await window.XF.get('profileViews/'+profileUid);
+    if(!snap.exists())return;
+    const viewers=[];snap.forEach(c=>viewers.push(c.val()));
+    viewers.sort((a,b)=>(b.viewedAt||0)-(a.viewedAt||0));
+    const recent=viewers.slice(0,5);
+    if(recent.length===0)return;
+    const strip=document.createElement('div');
+    strip.className='profile-viewers-strip';
+    strip.innerHTML=`
+      <div class="profile-viewers-avatars">${recent.map(v=>avatarHTML(v,'sm')).join('')}</div>
+      <div class="profile-viewers-label">${recent.length} recent viewer${recent.length>1?'s':''}</div>`;
+    // Tap to expand panel
+    let panelOpen=false;
+    strip.onclick=function(e){
+      e.stopPropagation();
+      let panel=strip.querySelector('.profile-viewers-panel');
+      if(panel){panel.remove();panelOpen=false;return;}
+      panelOpen=true;
+      panel=document.createElement('div');panel.className='profile-viewers-panel';
+      panel.innerHTML=viewers.slice(0,10).map(v=>`
+        <div class="profile-viewer-row" onclick="openUserProfile('${v.uid}',event)">
+          ${avatarHTML(v,'sm')}
+          <div>
+            <div class="profile-viewer-name">${escapeHTML(v.displayName||'Member')}</div>
+            <div class="profile-viewer-handle">@${escapeHTML(v.handle||'member')} · ${timeAgo(v.viewedAt)}</div>
+          </div>
+        </div>`).join('');
+      strip.appendChild(panel);
+      setTimeout(()=>document.addEventListener('click',function h(){panel.remove();document.removeEventListener('click',h);},{once:true}),50);
+    };
+    containerEl.insertBefore(strip,containerEl.firstChild);
+  }catch(e){}
+}
+
+/* ══════════════════════════════════════════════
+   CLICKABLE PROFILE PHOTO + BANNER
+══════════════════════════════════════════════ */
+function makeProfilePhotosClickable(containerEl,profile){
+  // Banner
+  const bannerEl=containerEl.querySelector('.profile-banner img');
+  if(bannerEl){bannerEl.style.cursor='pointer';bannerEl.onclick=function(e){e.stopPropagation();openLightbox(profile.bannerURL);};}
+  // Avatar
+  const avatarEl=containerEl.querySelector('.profile-avatar-wrap img,.profile-avatar-wrap .avatar');
+  if(avatarEl&&profile.photoURL){avatarEl.style.cursor='pointer';avatarEl.onclick=function(e){e.stopPropagation();openLightbox(profile.photoURL);};}
+}
+
+/* ══════════════════════════════════════════════
+   ADMIN: edit post likes
+══════════════════════════════════════════════ */
+async function adminLoadPosts(){
+  const container=$('adminPostList');if(!container)return;
+  container.innerHTML='<div style="color:var(--text-dim);font-size:0.85rem">Loading…</div>';
+  try{
+    const snap=await window.XF.get('posts');
+    if(!snap.exists()){container.innerHTML='<div style="color:var(--text-dim);font-size:0.85rem">No posts</div>';return;}
+    const posts=[];snap.forEach(c=>posts.push({id:c.key,...c.val()}));
+    posts.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    container.innerHTML=posts.slice(0,30).map(p=>{
+      const likeCount=p.likes?Object.keys(p.likes).length:0;
+      return`<div style="padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;font-size:0.83rem">
+        <div style="font-weight:600;margin-bottom:4px;color:var(--text-dim)">@${escapeHTML(p.handle||p.authorUid||'?')} · ${timeAgo(p.createdAt)}</div>
+        <div style="margin-bottom:8px;color:var(--text)">${escapeHTML((p.text||'').slice(0,80))}${(p.text||'').length>80?'…':''}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:var(--text-dim);font-size:0.8rem">❤ ${likeCount} likes</span>
+          <input id="likeEdit-${p.id}" type="number" value="${likeCount}" min="0" style="width:70px;padding:4px 8px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.8rem;outline:none">
+          <button class="btn btn-accent btn-sm" style="font-size:0.75rem;padding:4px 10px" onclick="adminSetLikes('${p.id}')">Set Likes</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){container.innerHTML='<div style="color:var(--text-dim);font-size:0.85rem">Could not load posts</div>';}
+}
+async function adminSetLikes(postId){
+  const input=$('likeEdit-'+postId);if(!input)return;
+  const newCount=parseInt(input.value);if(isNaN(newCount)||newCount<0)return showToast('Enter a valid number');
+  try{
+    // Build a synthetic likes object with that many fake keys
+    const snap=await window.XF.get('posts/'+postId+'/likes');
+    const existing=snap.exists()?snap.val():{};
+    const existingKeys=Object.keys(existing);
+    // Add or remove synthetic like keys to reach target count
+    const fakeBase='_fake_like_';
+    // Remove all fake keys first
+    const updates={};
+    existingKeys.filter(k=>k.startsWith(fakeBase)).forEach(k=>updates['posts/'+postId+'/likes/'+k]=null);
+    // Add new fake keys up to newCount minus real likes
+    const realCount=existingKeys.filter(k=>!k.startsWith(fakeBase)).length;
+    const toAdd=Math.max(0,newCount-realCount);
+    for(let i=0;i<toAdd;i++)updates['posts/'+postId+'/likes/'+fakeBase+i]=true;
+    await window.XF.multiUpdate(updates);
+    showToast('Likes updated to '+newCount);
+    adminLoadPosts();
+  }catch(e){showToast('Failed to update likes');}
+}
+
+/* ══════════════════════════════════════════════
+   PROFILE SHARING — deep link  (?user=HANDLE or ?uid=UID)
+══════════════════════════════════════════════ */
+function checkProfileDeepLink(){
+  const params=new URLSearchParams(window.location.search);
+  const handle=params.get('user');const uid=params.get('uid');
+  if(!handle&&!uid)return false;
+  window.history.replaceState({},'',window.location.pathname);
+  (async()=>{
+    try{
+      let targetUid=uid;
+      if(!targetUid&&handle){
+        // Lookup uid by handle
+        const snap=await window.XF.get('users');
+        if(snap.exists())snap.forEach(c=>{if((c.val().handle||'').toLowerCase()===handle.toLowerCase())targetUid=c.key;});
+      }
+      if(!targetUid){showToast('Profile not found');return;}
+      if(currentUser&&targetUid===currentUser.uid){showPage('profile');return;}
+      showPage('user-profile',{uid:targetUid});
+    }catch(e){showToast('Could not load profile');}
+  })();
+  return true;
+}
+function shareProfile(){
+  if(!currentProfile)return;
+  const handle=currentProfile.handle||currentUser?.uid;
+  const url=window.location.origin+window.location.pathname+'?user='+encodeURIComponent(handle);
+  if(navigator.share){
+    navigator.share({title:currentProfile.displayName+' — X-Musk Financial Club',text:'Check out '+currentProfile.displayName+' on X-Musk Financial Club',url}).catch(()=>{});
+  }else{
+    navigator.clipboard?.writeText(url).then(()=>showToast('Profile link copied!')).catch(()=>showToast('Link: '+url));
+  }
+}
+function shareUserProfile(uid,displayName,handle){
+  const url=window.location.origin+window.location.pathname+'?user='+encodeURIComponent(handle||uid);
+  if(navigator.share){
+    navigator.share({title:(displayName||'Member')+' — X-Musk Financial Club',text:'Check out '+(displayName||'Member')+' on X-Musk Financial Club',url}).catch(()=>{});
+  }else{
+    navigator.clipboard?.writeText(url).then(()=>showToast('Profile link copied!')).catch(()=>showToast('Link: '+url));
+  }
+}
+
+/* ══════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded',async()=>{
+  applyStoredTheme();
   initLandingParticles();
   try{
     await window.XFire.load();
