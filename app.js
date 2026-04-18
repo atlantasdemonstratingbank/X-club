@@ -101,7 +101,10 @@ function escapeHTML(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').rep
 function formatCount(n){n=Number(n)||0;if(n>=1e9)return(n/1e9).toFixed(1).replace(/\.0$/,'')+'B';if(n>=1e6)return(n/1e6).toFixed(1).replace(/\.0$/,'')+'M';if(n>=1e3)return(n/1e3).toFixed(1).replace(/\.0$/,'')+'K';return String(n);}
 function requireVerified(action){
   if(!currentUser){showPage('login');return false;}
-  if(['messages','dm','connect with members','follow'].includes(action))return true;
+  // These actions are open to all logged-in users (verified or not)
+  const openActions=['messages','dm','connect with members','follow','post','comment','event'];
+  if(openActions.includes(action))return true;
+  // Everything else (invest, private events, etc.) requires verification
   if(!currentProfile?.verified){showPaywall(action);return false;}
   return true;
 }
@@ -1330,16 +1333,21 @@ async function sendDMText(uid){
     localStorage.setItem(limitKey,String(sentToday+1));
     const remaining=DAILY_LIMIT-sentToday-1;if(remaining<=3)showToast(remaining+' free messages remaining today');
   }
+  // Clear input immediately for responsiveness
   if(input)input.value='';
-  // Clear typing
   const convId=[currentUser.uid,uid].sort().join('_');
   window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
   clearTimeout(_typingTimer);
-  // Send message with readBy for sender already set
-  await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
-  // Notify recipient
-  notifyDMRecipient(uid,text);
-  refreshMsgBadge();
+  try{
+    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
+    notifyDMRecipient(uid,text);
+    refreshMsgBadge();
+  }catch(err){
+    // Restore the unsent text so user doesn't lose it
+    if(input)input.value=text;
+    showToast('Failed to send — check your connection');
+    console.error('[DM] send failed:',err);
+  }
 }
 async function notifyDMRecipient(toUid,preview){
   try{
@@ -1358,7 +1366,7 @@ async function sendDMImage(inputEl,uid){
     const p=$('dmImgPreview');if(p)p.innerHTML='';
     notifyDMRecipient(uid,'📷 Photo');
     refreshMsgBadge();
-  }catch(e){showToast('Image upload failed');}
+  }catch(e){showToast('Failed to send image — check your connection');console.error('[DM] image send failed:',e);}
 }
 
 

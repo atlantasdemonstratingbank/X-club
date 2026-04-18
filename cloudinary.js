@@ -1,144 +1,109 @@
 /* cloudinary.js — X Club Image Upload
-   Compresses heavily before uploading to Cloudinary. */
+   Compresses aggressively with context-aware presets before uploading. */
 'use strict';
 
 const CLOUDINARY = {
-  cloudName: 'dbgxllxdb',
-  uploadPreset: 'efootball_screenshots',  /* from config.js */
-  compression: { maxW: 1200, maxH: 1200, quality: 0.78 },   /* slightly tighter than config default */
-  maxFileSizeKB: 800   /* reject if still >800 KB after compression */
+  cloudName:    'dbgxllxdb',
+  uploadPreset: 'efootball_screenshots',
 };
 
-/* ── Main upload entry ───────────────────────────────────────────────── */
-/**
- * Compress and upload a File to Cloudinary.
- * @param {File}   file      — raw file from <input type="file">
- * @param {string} folder    — e.g. 'x_profiles', 'x_kyc'
- * @param {function} onProgress — called with 0–100
- * @returns {Promise<{url, publicId, width, height, bytes}>}
- */
+/* Compression presets per upload context */
+const COMPRESS_PRESETS = {
+  x_profiles:  { maxW: 400,  maxH: 400,  quality: 0.72, maxKB: 150 },
+  x_banners:   { maxW: 1000, maxH: 400,  quality: 0.70, maxKB: 300 },
+  x_posts:     { maxW: 900,  maxH: 900,  quality: 0.70, maxKB: 400 },
+  dm_images:   { maxW: 600,  maxH: 600,  quality: 0.65, maxKB: 200 },
+  x_kyc:       { maxW: 1200, maxH: 1200, quality: 0.75, maxKB: 600 },
+  default:     { maxW: 800,  maxH: 800,  quality: 0.68, maxKB: 350 },
+};
+
 async function xUploadImage(file, folder = 'x_uploads', onProgress = () => {}) {
   if (!file || !file.type.startsWith('image/')) throw new Error('Not an image file.');
-
+  const preset = COMPRESS_PRESETS[folder] || COMPRESS_PRESETS.default;
   onProgress(5);
-  const compressed = await compressImage(file);
+  const compressed = await compressImage(file, preset);
   onProgress(40);
-
-  /* Size guard after compression */
-  if (compressed.size > CLOUDINARY.maxFileSizeKB * 1024) {
-    console.warn(`[XCloud] Still ${Math.round(compressed.size/1024)} KB after compression — uploading anyway.`);
+  const maxBytes = preset.maxKB * 1024;
+  if (compressed.size > maxBytes) {
+    throw new Error(`Image still ${Math.round(compressed.size/1024)} KB after compression. Please use a smaller image.`);
   }
-
   const fd = new FormData();
-  fd.append('file',           compressed);
-  fd.append('upload_preset',  CLOUDINARY.uploadPreset);
-  fd.append('folder',         folder);
-  fd.append('tags',           'xclub');
-
+  fd.append('file',          compressed);
+  fd.append('upload_preset', CLOUDINARY.uploadPreset);
+  fd.append('folder',        folder);
+  fd.append('tags',          'xclub');
   onProgress(50);
-
   const res = await uploadWithProgress(
     `https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`,
     fd,
     pct => onProgress(50 + Math.round(pct * 0.5))
   );
-
   onProgress(100);
-
-  return {
-    url:      res.secure_url,
-    publicId: res.public_id,
-    width:    res.width,
-    height:   res.height,
-    bytes:    res.bytes,
-    format:   res.format
-  };
+  return { url: res.secure_url, publicId: res.public_id, width: res.width, height: res.height, bytes: res.bytes, format: res.format };
 }
 
-/* ── Image compression ───────────────────────────────────────────────── */
-async function compressImage(file) {
-  const { maxW, maxH, quality } = CLOUDINARY.compression;
-
+async function compressImage(file, preset) {
+  const { maxW, maxH, quality } = preset;
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const url = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
-      URL.revokeObjectURL(url);
-
+      URL.revokeObjectURL(objectUrl);
       let { naturalWidth: w, naturalHeight: h } = img;
-
-      /* Scale down preserving aspect ratio */
       if (w > maxW || h > maxH) {
         const ratio = Math.min(maxW / w, maxH / h);
         w = Math.round(w * ratio);
         h = Math.round(h * ratio);
       }
-
       const canvas = document.createElement('canvas');
-      canvas.width  = w;
-      canvas.height = h;
+      canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
-
-      /* Fill white for transparency → JPEG conversion */
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-
-      canvas.toBlob(
-        blob => {
-          if (!blob) { reject(new Error('Canvas compression failed')); return; }
-          /* If WebP is not supported fall back to JPEG */
-          const ext  = blob.type === 'image/webp' ? 'webp' : 'jpg';
-          const name = file.name.replace(/\.[^.]+$/, '') + '.' + ext;
-          resolve(new File([blob], name, { type: blob.type }));
-        },
-        'image/webp',   /* Try WebP first for better compression */
-        quality
-      );
+      const tryWebP = () => {
+        canvas.toBlob(blob => {
+          if (blob && blob.size > 0) {
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' }));
+          } else { tryJPEG(); }
+        }, 'image/webp', quality);
+      };
+      const tryJPEG = () => {
+        canvas.toBlob(blob => {
+          if (!blob) { reject(new Error('Compression failed')); return; }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', quality);
+      };
+      tryWebP();
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
-    img.src = url;
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not load image')); };
+    img.src = objectUrl;
   });
 }
 
-/* ── XHR upload with progress ────────────────────────────────────────── */
 function uploadWithProgress(url, formData, onPct) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable) onPct(e.loaded / e.total);
-    });
+    xhr.upload.addEventListener('progress', e => { if (e.lengthComputable) onPct(e.loaded / e.total); });
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText)); }
-        catch (err) { reject(new Error('Invalid JSON from Cloudinary')); }
-      } else {
-        reject(new Error(`Cloudinary error: ${xhr.status}`));
-      }
+        try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error('Invalid response from Cloudinary')); }
+      } else { reject(new Error(`Cloudinary ${xhr.status} — upload failed`)); }
     });
     xhr.addEventListener('error',  () => reject(new Error('Network error during upload')));
-    xhr.addEventListener('abort',  () => reject(new Error('Upload aborted')));
+    xhr.addEventListener('abort',  () => reject(new Error('Upload was cancelled')));
     xhr.send(formData);
   });
 }
 
-/* ── Delete image (server-side only — needs signed request) ─────────── */
-/* Note: deletion from client requires a signed API call.
-   In production, proxy through a Cloud Function. */
-async function xDeleteImage(publicId) {
-  console.warn('[XCloud] Client-side delete not supported. Use a server function.', publicId);
-}
-
-/* ── Thumbnail helper ────────────────────────────────────────────────── */
 function xThumb(url, w = 200, h = 200) {
   if (!url || !url.includes('cloudinary.com')) return url;
   return url.replace('/upload/', `/upload/c_fill,w_${w},h_${h},q_auto,f_auto/`);
 }
 
-/* ── Export ──────────────────────────────────────────────────────────── */
-window.XCloud = {
-  upload:      xUploadImage,
-  deleteImage: xDeleteImage,
-  thumb:       xThumb
-};
+async function xDeleteImage(publicId) {
+  console.warn('[XCloud] Client-side delete requires a signed API call.', publicId);
+}
+
+window.XCloud = { upload: xUploadImage, deleteImage: xDeleteImage, thumb: xThumb };
