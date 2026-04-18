@@ -161,6 +161,8 @@ function hideLoader(){
    PAGE ROUTING  (proper SPA back stack)
 ══════════════════════════════════════════════ */
 const _pageStack=[];
+let _suppressPopstate=false; // guard against our own pushState triggering popstate
+
 function showPage(name,opts={}){
   if(name==='feed'&&!currentUser)name='landing';
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -174,21 +176,52 @@ function showPage(name,opts={}){
   if(name==='profile')renderOwnProfile();
   if(name==='user-profile')renderUserProfile(opts.uid);
   if(name==='post-detail')renderPostDetail(opts.postId);
-  if(!['landing','login','register','reset'].includes(name))_pageStack.push({name,opts});
+  // Only push if it's a navigable page and not the same as the current top
+  if(!['landing','login','register','reset'].includes(name)){
+    const top=_pageStack[_pageStack.length-1];
+    const isDuplicate=top&&top.name===name&&JSON.stringify(top.opts)===JSON.stringify(opts);
+    if(!isDuplicate){
+      _pageStack.push({name,opts});
+      // Push a real browser history entry so device back/swipe is intercepted
+      _suppressPopstate=true;
+      window.history.pushState({page:name,opts},'',window.location.pathname);
+      _suppressPopstate=false;
+    }
+  }
 }
+
 function goBack(){
   _pageStack.pop();
   const prev=_pageStack[_pageStack.length-1];
   if(prev){
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     const pg=$('page-'+prev.name);if(pg)pg.classList.add('active');
-    activePage=prev.name;updateNavActive();
+    activePage=prev.name;updateNavActive();window.scrollTo(0,0);
     if(prev.name==='user-profile')renderUserProfile(prev.opts?.uid);
     else if(prev.name==='feed')renderFeed();
     else if(prev.name==='discover')renderDiscover();
     else if(prev.name==='profile')renderOwnProfile();
+    else if(prev.name==='post-detail')renderPostDetail(prev.opts?.postId);
+    else if(prev.name==='notifications')renderNotifications();
+    else if(prev.name==='messages')renderConversations();
   }else showPage('feed');
 }
+
+// Intercept device back button / swipe-back gesture
+window.addEventListener('popstate',()=>{
+  if(_suppressPopstate)return;
+  // If DM is open, close it first
+  if($('dmFullpage')&&$('dmFullpage').style.display!=='none'){
+    closeDMFullpage();
+    // Re-push so next back press goes further
+    window.history.pushState({},'',window.location.pathname);
+    return;
+  }
+  goBack();
+  // Re-push an entry so there's always something to go back to
+  // (prevents the very first back from leaving the PWA)
+  window.history.pushState({},'',window.location.pathname);
+});
 function updateNavActive(){
   document.querySelectorAll('.nav-link,.mobile-nav-link').forEach(l=>l.classList.toggle('active',l.dataset.page===activePage));
 }
@@ -325,6 +358,9 @@ function renderFeed(){
       let posts=[];
       if(snap.exists())snap.forEach(c=>posts.push({id:c.key,...c.val()}));
       posts.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      // Filter out posts from blocked users
+      const blockedUids=await getBlockedUids();
+      if(blockedUids.size>0)posts=posts.filter(p=>!blockedUids.has(p.authorUid));
       if(feedTab==='following'&&currentUser){
         const connSnap=await window.XF.get('connections/'+currentUser.uid);
         const connUids=connSnap.exists()?Object.keys(connSnap.val()):[];
@@ -337,9 +373,12 @@ function renderFeed(){
   });
 }
 async function _renderPostList(posts,container){
-  const uids=[...new Set(posts.map(p=>p.authorUid).filter(u=>u!==CLAUDE_ENGINEER_UID))];
+  const uids=[...new Set(posts.map(p=>p.authorUid).filter(u=>u&&u!==CLAUDE_ENGINEER_UID))];
   const profiles={};
-  await Promise.all(uids.map(async uid=>{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}));
+  // Fetch each profile independently — one failure must not block the whole feed
+  await Promise.allSettled(uids.map(async uid=>{
+    try{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}catch(e){}
+  }));
   container.innerHTML=posts.map(p=>{
     if(p.type==='business')return businessPostHTML(p,profiles[p.authorUid]);
     if(p.authorUid===CLAUDE_ENGINEER_UID)return claudeEngineerPostHTML(p);
@@ -668,7 +707,8 @@ async function renderDiscover(){
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
   try{
     const snap=await window.XF.get('users');const people=[];
-    if(snap.exists())snap.forEach(c=>{if(c.key!==currentUser?.uid)people.push(c.val());});
+    const blockedUids=await getBlockedUids();
+    if(snap.exists())snap.forEach(c=>{if(c.key!==currentUser?.uid&&!blockedUids.has(c.key))people.push(c.val());});
     if(people.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">⊛</div><div class="empty-state-title">No members yet</div></div>`;return;}
     const myConnSnap=currentUser?await window.XF.get('connections/'+currentUser.uid):null;
     const myConns=myConnSnap?.exists()?myConnSnap.val():{};
@@ -736,8 +776,39 @@ async function disconnect(uid){
 }
 
 /* ══════════════════════════════════════════════
-   SEARCH  (fixed duplicate ID issue)
+   BLOCK USER
 ══════════════════════════════════════════════ */
+async function blockUser(uid,displayName){
+  if(!currentUser||uid===currentUser.uid)return;
+  if(!confirm(`Block ${displayName||'this user'}? They won't be able to see your content and you won't see theirs.`))return;
+  try{
+    await window.XF.set('blocks/'+currentUser.uid+'/'+uid,{blockedAt:window.XF.ts(),displayName:displayName||''});
+    // Remove connection if exists
+    await window.XF.remove('connections/'+currentUser.uid+'/'+uid);
+    await window.XF.remove('connections/'+uid+'/'+currentUser.uid);
+    showToast('User blocked');
+    goBack();
+  }catch(e){showToast('Could not block user');}
+}
+async function unblockUser(uid,displayName){
+  if(!currentUser)return;
+  try{
+    await window.XF.remove('blocks/'+currentUser.uid+'/'+uid);
+    showToast(displayName+' unblocked');
+  }catch(e){showToast('Could not unblock');}
+}
+async function getBlockedUids(){
+  if(!currentUser)return new Set();
+  try{
+    const snap=await window.XF.get('blocks/'+currentUser.uid);
+    return snap.exists()?new Set(Object.keys(snap.val())):new Set();
+  }catch(e){return new Set();}
+}
+async function isBlocked(uid){
+  if(!currentUser)return false;
+  try{const s=await window.XF.get('blocks/'+currentUser.uid+'/'+uid);return s.exists();}
+  catch(e){return false;}
+}
 async function searchUsers(query){
   const discoverContainer=$('searchResults');
   const sidebarContainer=$('sidebarSearchResults');
@@ -880,9 +951,23 @@ async function renderUserProfile(uid){
   const container=$('userProfileContent');if(!container||!uid)return;
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
   try{
+    // Check if this user is blocked by me
+    const blocked=await isBlocked(uid);
+
     const snap=await window.XF.get('users/'+uid);
     if(!snap.exists()){container.innerHTML='<div class="empty-state"><div class="empty-state-title">User not found</div></div>';return;}
     const profile=snap.val();
+
+    if(blocked){
+      container.innerHTML=`<div class="empty-state" style="padding:48px 24px">
+        <div class="empty-state-icon" style="font-size:2.5rem">🚫</div>
+        <div class="empty-state-title">You've blocked this user</div>
+        <div class="empty-state-desc">They can't see your content and you won't see theirs.</div>
+        <button class="btn btn-outline btn-sm" style="margin-top:20px" onclick="unblockUser('${uid}','${escapeHTML(profile.displayName||'Member')}').then(()=>renderUserProfile('${uid}'))">Unblock</button>
+      </div>`;
+      return;
+    }
+
     let connStatus='none';
     if(currentUser){
       const cs=await window.XF.get('connections/'+currentUser.uid+'/'+uid);
@@ -908,6 +993,7 @@ async function renderUserProfile(uid){
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
             </button>
+            ${currentUser&&uid!==currentUser.uid?`<button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="blockUser('${uid}','${escapeHTML(profile.displayName||'Member')}')">🚫 Block</button>`:''}
           </div>
         </div>
         <div class="profile-name">${escapeHTML(profile.displayName||'Member')}${verifiedBadge(profile.verified,true)}</div>
@@ -926,11 +1012,8 @@ async function renderUserProfile(uid){
       <div id="userProfilePosts">
         ${posts.length===0?'<div class="empty-state"><div class="empty-state-desc">No posts yet</div></div>':posts.map(p=>p.type==='business'?businessPostHTML(p,profile):postHTML(p,profile)).join('')}
       </div>`;
-    // Record this user viewed the profile
     recordProfileView(uid);
-    // Make profile photos clickable
     setTimeout(()=>makeProfilePhotosClickable(container,profile),50);
-    // Render viewers strip
     renderProfileViewers(uid,container);
   }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load profile</div></div>';}
 }
@@ -951,17 +1034,47 @@ async function renderNotifications(){
   const notifs=[];if(snap.exists())snap.forEach(c=>notifs.push({id:c.key,...c.val()}));
   notifs.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   if(notifs.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">⍾</div><div class="empty-state-title">No notifications yet</div></div>`;return;}
-  container.innerHTML=notifs.map(n=>{
+
+  // Pre-fetch connection + request status for all connection_request notifs in one pass
+  const connReqNotifs=notifs.filter(n=>n.type==='connection_request'&&n.reqId&&n.fromUid);
+  const connStatusMap={};
+  await Promise.all(connReqNotifs.map(async n=>{
+    // Check if already connected
+    const cs=await window.XF.get('connections/'+currentUser.uid+'/'+n.fromUid);
+    if(cs.exists()){connStatusMap[n.reqId]='connected';return;}
+    // Check request status (accepted / declined / pending)
+    const rs=await window.XF.get('connectionRequests/'+n.reqId);
+    connStatusMap[n.reqId]=rs.exists()?rs.val().status:'pending';
+  }));
+
+  // Deduplicate: for each sender only show the latest connection_request notif
+  const seenConnReq=new Set();
+  const deduped=notifs.filter(n=>{
+    if(n.type!=='connection_request')return true;
+    if(seenConnReq.has(n.fromUid))return false;
+    seenConnReq.add(n.fromUid);return true;
+  });
+
+  container.innerHTML=deduped.map(n=>{
     const u=n.read?'':'unread';
     if(n.type==='connection_request'){
-      // Check if already connected — if so show connected state instead of buttons
-      return`<div class="notif-item ${u}"><div class="notif-icon">🤝</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> wants to connect with you</div><div class="notif-time">${timeAgo(n.createdAt)}</div><div id="connBtns_${n.reqId}" style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnectionFromNotif('${n.reqId}','${n.fromUid}',this)">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div></div></div>`;
+      const status=connStatusMap[n.reqId]||'pending';
+      let actionHTML='';
+      if(status==='connected'||status==='accepted'){
+        actionHTML=`<div style="margin-top:8px"><span style="color:var(--success);font-size:0.85rem;font-weight:600">✓ Connected</span></div>`;
+      }else if(status==='declined'){
+        actionHTML=`<div style="margin-top:8px"><span style="color:var(--text-dim);font-size:0.85rem">Request declined</span></div>`;
+      }else{
+        actionHTML=`<div id="connBtns_${n.reqId}" style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnectionFromNotif('${n.reqId}','${n.fromUid}',this)">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div>`;
+      }
+      return`<div class="notif-item ${u}"><div class="notif-icon">🤝</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> wants to connect with you</div><div class="notif-time">${timeAgo(n.createdAt)}</div>${actionHTML}</div></div>`;
     }
     if(n.type==='connection_accepted')return`<div class="notif-item ${u}"><div class="notif-icon">✅</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> accepted your connection request</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
     if(n.type==='new_message')return`<div class="notif-item ${u}" onclick="openDMWith('${n.fromUid}')"><div class="notif-icon">💬</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> sent you a message${n.preview?': '+escapeHTML(n.preview):''}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
     return`<div class="notif-item ${u}"><div class="notif-icon">🔔</div><div style="flex:1"><div class="notif-text">${escapeHTML(n.text||'New notification')}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
   }).join('');
-  // Mark read after 2s so user sees highlights first
+
+  // Mark ALL as read after 2s — including new_message notifs so badge resets properly
   setTimeout(async()=>{
     const unread=notifs.filter(n=>!n.read);
     if(unread.length>0){
@@ -1004,20 +1117,33 @@ async function renderConversations(){
     const profiles={};
     await Promise.all(uids.map(async uid=>{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}));
     const previews={};
+    const unreadCounts={};
     await Promise.all(uids.map(async uid=>{
       const convId=[currentUser.uid,uid].sort().join('_');
       const dmSnap=await window.XF.get('dms/'+convId);
-      if(dmSnap.exists()){const msgs=[];dmSnap.forEach(c=>msgs.push(c.val()));if(msgs.length>0)previews[uid]=msgs[msgs.length-1];}
+      if(dmSnap.exists()){
+        const msgs=[];dmSnap.forEach(c=>msgs.push({id:c.key,...c.val()}));
+        if(msgs.length>0)previews[uid]=msgs[msgs.length-1];
+        unreadCounts[uid]=msgs.filter(m=>m.senderUid!==currentUser.uid&&(!m.readBy||!m.readBy[currentUser.uid])).length;
+      }
     }));
     container.innerHTML=uids.map(uid=>{
       const p=profiles[uid];if(!p)return'';
       const preview=previews[uid];
-      const previewText=preview?(preview.imageUrl?'📷 Photo':String(preview.text||'').slice(0,40)):'@'+escapeHTML(p.handle||'member');
-      return`<div class="conversation-item" onclick="openDMWith('${uid}')" data-uid="${uid}">
+      const unread=unreadCounts[uid]||0;
+      const previewText=preview?(preview.imageUrl?'📷 Photo':String(preview.text||'').slice(0,40)):'Start a conversation';
+      const ts=preview?.createdAt?timeAgo(preview.createdAt):'';
+      return`<div class="conversation-item${unread>0?' unread-conv':''}" onclick="openDMWith('${uid}')" data-uid="${uid}">
         ${avatarHTML(p,'md')}
         <div class="conv-info">
-          <div class="conv-name">${escapeHTML(p.displayName||'Member')}${verifiedBadge(p.verified)}</div>
-          <div class="conv-preview">${escapeHTML(previewText)}</div>
+          <div class="conv-name-row">
+            <div class="conv-name${unread>0?' conv-name-bold':''}">${escapeHTML(p.displayName||'Member')}${verifiedBadge(p.verified)}</div>
+            ${ts?`<div class="conv-time">${ts}</div>`:''}
+          </div>
+          <div class="conv-preview-row">
+            <div class="conv-preview${unread>0?' conv-preview-unread':''}">${escapeHTML(previewText)}</div>
+            ${unread>0?`<div class="conv-unread-badge">${unread}</div>`:''}
+          </div>
         </div>
       </div>`;
     }).filter(Boolean).join('');
@@ -1499,12 +1625,14 @@ async function sendReset(){
 function toggleTheme(){
   const isLight=document.body.classList.toggle('theme-light');
   localStorage.setItem('xclub_theme',isLight?'light':'dark');
-  const icon=$('themeToggleIcon');
-  if(icon)icon.textContent=isLight?'🌙':'☀';
+  ['themeToggleIcon','mobileThemeIcon'].forEach(id=>{const el=$(id);if(el)el.textContent=isLight?'🌙':'☀';});
 }
 function applyStoredTheme(){
   const t=localStorage.getItem('xclub_theme');
-  if(t==='light'){document.body.classList.add('theme-light');const icon=$('themeToggleIcon');if(icon)icon.textContent='🌙';}
+  if(t==='light'){
+    document.body.classList.add('theme-light');
+    ['themeToggleIcon','mobileThemeIcon'].forEach(id=>{const el=$(id);if(el)el.textContent='🌙';});
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -1686,6 +1814,9 @@ function shareUserProfile(uid,displayName,handle){
 document.addEventListener('DOMContentLoaded',async()=>{
   applyStoredTheme();
   initLandingParticles();
+  // Seed one history entry so the very first device back is intercepted by popstate
+  // instead of leaving the PWA/tab entirely
+  window.history.replaceState({page:'root'},'',window.location.pathname);
   // Safety net: if Firebase auth never fires within 8s, show the landing page
   const loaderFailsafe=setTimeout(()=>{hideLoader();showPage('landing');},8000);
   try{
