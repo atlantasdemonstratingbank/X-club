@@ -653,6 +653,35 @@ body.theme-light .verified-badge { background: #b8860b; }
 }
 .dm-send-btn:hover { opacity: 0.85; }
 
+/* ── WhatsApp-style message wrapper ── */
+.chat-msg-wrap {
+  display: flex; align-items: flex-end; gap: 6px; max-width: 85%;
+}
+.chat-msg-wrap.me { align-self: flex-end; flex-direction: row-reverse; }
+.chat-msg-wrap.them { align-self: flex-start; }
+.chat-msg-avatar { flex-shrink: 0; margin-bottom: 18px; }
+.chat-msg-col { display: flex; flex-direction: column; gap: 2px; max-width: 100%; }
+.msg-meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.7rem; color: var(--text-dim); padding: 0 4px;
+}
+.msg-meta.me { justify-content: flex-end; }
+.msg-tick { font-size: 0.72rem; color: var(--text-dim); letter-spacing: -2px; }
+.msg-tick.read { color: #53bdeb; }
+/* Typing dots indicator */
+.typing-indicator {
+  display: flex; gap: 4px; align-items: center; padding: 10px 14px;
+  background: var(--bg-3); border-radius: 18px; border-bottom-left-radius: 4px;
+  align-self: flex-start; width: fit-content;
+}
+.typing-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim);
+  animation: typingBounce 1.2s infinite;
+}
+.typing-dot:nth-child(2){ animation-delay: 0.2s; }
+.typing-dot:nth-child(3){ animation-delay: 0.4s; }
+@keyframes typingBounce{ 0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)} }
+
 /* Legacy aliases kept for compatibility */
 .messages-layout { display:flex; height:100vh; }
 .conversations-list { width:350px; flex-shrink:0; border-right:1px solid var(--border); overflow-y:auto; }
@@ -740,7 +769,7 @@ body.theme-light .verified-badge { background: #b8860b; }
   cursor: pointer;
 }
 .notif-item:hover { background: var(--bg-hover); }
-.notif-item.unread { background: rgba(29,155,240,0.04); }
+.notif-item.unread { background: rgba(29,155,240,0.10); border-left: 3px solid var(--accent); }
 .notif-icon { font-size: 1.3rem; width: 40px; text-align: center; flex-shrink: 0; padding-top: 2px; }
 .notif-text { font-size: 0.93rem; line-height: 1.45; }
 .notif-text strong { font-weight: 700; }
@@ -1926,3 +1955,23 @@ body.theme-light .verified-badge { background: #b8860b; }
   .landing-topbar-name { display: none; }
   .landing-hero { padding: 32px 20px 24px; }
 }
+
+/* ── Message delete context menu ── */
+.msg-ctx-menu {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  min-width: 160px;
+  animation: fadeIn 0.1s ease;
+}
+.msg-ctx-item {
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: background 0.1s;
+}
+.msg-ctx-item:hover { background: var(--bg-hover); }
+.msg-ctx-item.delete { color: var(--danger, #f4212e); }

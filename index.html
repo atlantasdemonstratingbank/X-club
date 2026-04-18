@@ -60,6 +60,7 @@
       </div>
       <div class="nav-link" data-page="messages" onclick="showPage('messages')">
         <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span>Messages</span>
+        <span class="nav-badge" id="navMsgBadge" style="display:none">0</span>
       </div>
       <div class="nav-link" data-page="profile" onclick="showPage('profile')">
         <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Profile</span>
@@ -431,7 +432,10 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             <input id="dmImgInput" type="file" accept="image/*" style="display:none" onchange="sendDMImage(this)">
           </label>
-          <input id="dmInput" class="dm-input" placeholder="Send a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMText();}">
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+            <div id="dmImgPreview"></div>
+            <input id="dmInput" class="dm-input" placeholder="Send a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMText();}">
+          </div>
           <button class="dm-send-btn" onclick="sendDMText()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
@@ -557,6 +561,7 @@
     </div>
     <div class="mobile-nav-link" data-page="messages" onclick="showPage('messages')">
       <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span>Messages</span>
+      <span class="mobile-nav-badge" id="mobileMsgBadge" style="display:none">0</span>
     </div>
     <div class="mobile-nav-link" data-page="profile" onclick="showPage('profile')">
       <span class="mnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Profile</span>

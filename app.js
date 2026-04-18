@@ -26,16 +26,45 @@ async function callGroq({ system, user, maxTokens=1024 }) {
    FLUTTERWAVE
 ══════════════════════════════════════════════ */
 const MEMBERSHIP_PRICE=1999, MEMBERSHIP_CURRENCY='EUR';
-let FLW_PUBLIC_KEY='FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
-async function loadFlwKey(){try{const s=await window.XF.get('config/flwKey');if(s.exists()&&s.val())FLW_PUBLIC_KEY=s.val();}catch(e){}}
+const FLW_PUBLIC_KEY='FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
+async function loadFlwKey(){/* Key is hardcoded — no override needed */}
 function currencySymbol(c){return{NGN:'₦',USD:'$',GBP:'£',EUR:'€',GHS:'₵',KES:'KSh',ZAR:'R',TZS:'TSh',UGX:'USh',RWF:'RF'}[c]||c||'€';}
 function launchFlutterwave(post,amount){
   const c=post.bizCurrency||'EUR',ref='xclub_'+post.id+'_'+currentUser?.uid+'_'+Date.now();
-  window.open('https://checkout.flutterwave.com/v3/hosted/pay?public_key='+FLW_PUBLIC_KEY
-    +'&tx_ref='+ref+'&amount='+amount+'&currency='+c
-    +'&customer_email='+encodeURIComponent(currentUser?.email||'')
-    +'&customer_name='+encodeURIComponent(currentProfile?.displayName||'Investor')
-    +'&customizations[title]='+encodeURIComponent(post.bizTitle||'Investment'),'_blank');
+  if(typeof FlutterwaveCheckout==='undefined'){
+    showToast('Payment system loading — please try again');return;
+  }
+  FlutterwaveCheckout({
+    public_key:FLW_PUBLIC_KEY,
+    tx_ref:ref,
+    amount:amount,
+    currency:c,
+    payment_options:'card,banktransfer,ussd',
+    customer:{email:currentUser?.email||'',name:currentProfile?.displayName||'Investor'},
+    customizations:{title:post.bizTitle||'Investment',description:'Investment via X-Musk Financial Club',logo:''},
+    callback:async function(data){
+      if(data.status==='successful'||data.status==='completed'){
+        try{
+          // Record the investment and update raised + investor count atomically
+          await window.XF.set('investments/'+post.id+'/'+currentUser.uid,{
+            uid:currentUser.uid,name:currentProfile?.displayName,email:currentUser.email,
+            amount,currency:c,status:'paid',txRef:data.tx_ref||ref,
+            transactionId:data.transaction_id||'',paidAt:window.XF.ts()
+          });
+          // Re-read current values to avoid race
+          const postSnap=await window.XF.get('posts/'+post.id);
+          const current=postSnap.exists()?postSnap.val():{};
+          const invSnap=await window.XF.get('investments/'+post.id);
+          let totalRaised=0,investorCount=0;
+          if(invSnap.exists())invSnap.forEach(c=>{const v=c.val();if(v.status==='paid'){totalRaised+=(v.amount||0);investorCount++;}});
+          await window.XF.update('posts/'+post.id,{bizRaised:totalRaised,investorCount});
+          showToast('✅ Payment confirmed! Thank you for investing.');
+          renderFeed();
+        }catch(err){showToast('Payment confirmed but update failed — contact support');}
+      }else showToast('Payment was not completed');
+    },
+    onclose:function(){}
+  });
 }
 
 /* ══════════════════════════════════════════════
@@ -138,6 +167,7 @@ function showPage(name,opts={}){
   const pg=$('page-'+name);if(pg)pg.classList.add('active');
   activePage=name;updateNavActive();window.scrollTo(0,0);
   if(name==='feed')renderFeed();
+  else if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;
   if(name==='discover')renderDiscover();
   if(name==='notifications')renderNotifications();
   if(name==='messages')renderConversations();
@@ -222,7 +252,7 @@ async function onAuthChange(user){
     isAdmin=false;
     const snap=await window.XF.get('users/'+user.uid);
     currentProfile=snap.exists()?snap.val():null;
-    updateNavUser();updateComposerAvatar();loadSuggested();startNotifWatch();
+    updateNavUser();updateComposerAvatar();loadSuggested();startNotifWatch();startMsgWatch();
     updateSidebarVerifyBtn();
     // Check for profile share deep-link first
     const handled=checkProfileDeepLink();
@@ -265,13 +295,13 @@ function initiatePayment(){
   if(typeof FlutterwaveCheckout==='undefined'){showToast('Payment system loading — try again');return;}
   FlutterwaveCheckout({
     public_key:FLW_PUBLIC_KEY,tx_ref:'XCLUB-'+currentUser.uid+'-'+Date.now(),
-    amount:MEMBERSHIP_PRICE,currency:MEMBERSHIP_CURRENCY,payment_options:'card,banktransfer',
+    amount:MEMBERSHIP_PRICE,currency:MEMBERSHIP_CURRENCY,payment_options:'card,banktransfer,ussd',
     customer:{email:currentUser.email,name:currentProfile.displayName||'Member'},
     customizations:{title:'X Club Membership',description:'Annual verified membership',logo:''},
     callback:async function(data){
       if(data.status==='successful'||data.status==='completed'){
         try{
-          await window.XF.update('users/'+currentUser.uid,{verified:true,verifiedAt:window.XF.ts(),paymentRef:data.transaction_id});
+          await window.XF.update('users/'+currentUser.uid,{verified:true,verifiedAt:window.XF.ts(),paymentRef:data.transaction_id||data.tx_ref});
           currentProfile.verified=true;closePaywall();showToast('✦ You are now a verified member!');
           updateNavUser();renderOwnProfile();
         }catch(err){showToast('Payment confirmed but update failed — contact support');}
@@ -280,28 +310,32 @@ function initiatePayment(){
     onclose:function(){}
   });
 }
+}
 
 /* ══════════════════════════════════════════════
-   FEED
+   FEED  (real-time listener)
 ══════════════════════════════════════════════ */
-async function renderFeed(){
+let _feedUnsubscribe=null;
+function renderFeed(){
   const container=$('feedPosts');if(!container)return;
+  // Tear down any previous listener
+  if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
-  try{
-    const snap=await window.XF.get('posts');
-    let posts=[];
-    if(snap.exists())snap.forEach(c=>posts.push({id:c.key,...c.val()}));
-    posts.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    // Following tab filter
-    if(feedTab==='following'&&currentUser){
-      const connSnap=await window.XF.get('connections/'+currentUser.uid);
-      const connUids=connSnap.exists()?Object.keys(connSnap.val()):[];
-      posts=posts.filter(p=>connUids.includes(p.authorUid)||p.authorUid===CLAUDE_ENGINEER_UID);
-      if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing from connections</div><div class="empty-state-desc">Connect with members to see their posts here</div></div>`;return;}
-    }
-    if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>`;return;}
-    await _renderPostList(posts,container);
-  }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load posts</div></div>';}
+  _feedUnsubscribe=window.XF.on('posts',async snap=>{
+    try{
+      let posts=[];
+      if(snap.exists())snap.forEach(c=>posts.push({id:c.key,...c.val()}));
+      posts.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      if(feedTab==='following'&&currentUser){
+        const connSnap=await window.XF.get('connections/'+currentUser.uid);
+        const connUids=connSnap.exists()?Object.keys(connSnap.val()):[];
+        posts=posts.filter(p=>connUids.includes(p.authorUid)||p.authorUid===CLAUDE_ENGINEER_UID);
+        if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing from connections</div><div class="empty-state-desc">Connect with members to see their posts here</div></div>`;return;}
+      }
+      if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>`;return;}
+      await _renderPostList(posts,container);
+    }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load posts</div></div>';}
+  });
 }
 async function _renderPostList(posts,container){
   const uids=[...new Set(posts.map(p=>p.authorUid).filter(u=>u!==CLAUDE_ENGINEER_UID))];
@@ -353,8 +387,8 @@ function postHTML(post,author){
       <div class="post-text">${escapeHTML(post.text||'')}</div>
       ${mediaHTML}
       <div class="post-actions" onclick="event.stopPropagation()">
-        <div class="post-action comment" onclick="openPost('${post.id}',event)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${commentCount>0?' '+commentCount:''}</div>
-        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+likeCount:''}</div>
+        <div class="post-action comment" onclick="openPost('${post.id}',event)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${commentCount>0?' '+formatCount(commentCount):''}</div>
+        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+formatCount(likeCount):''}</div>
         <div class="post-action share" onclick="sharePost('${post.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
       </div>
     </div>
@@ -378,8 +412,8 @@ function claudeEngineerPostHTML(post){
       </div>
       <div class="post-text">${escapeHTML(post.text||'')}</div>
       <div class="post-actions" onclick="event.stopPropagation()">
-        <div class="post-action comment" onclick="openPost('${post.id}',event)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${commentCount>0?' '+commentCount:''}</div>
-        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+likeCount:''}</div>
+        <div class="post-action comment" onclick="openPost('${post.id}',event)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${commentCount>0?' '+formatCount(commentCount):''}</div>
+        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+formatCount(likeCount):''}</div>
         <div class="post-action share" onclick="sharePost('${post.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
       </div>
     </div>
@@ -469,16 +503,27 @@ async function toggleLike(postId,el){
   if(!currentUser){showPage('login');return;}
   const uid=currentUser.uid,snap=await window.XF.get('posts/'+postId+'/likes/'+uid);
   const heartSVG=(filled)=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="${filled?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+  // Parse formatted count back to number (handles 1K, 1.2M etc)
+  function parseFormatted(txt){
+    const s=(txt||'').trim().replace(/[^0-9.KMBkmb]/g,'');
+    if(!s)return 0;
+    if(/k/i.test(s))return Math.round(parseFloat(s)*1000);
+    if(/m/i.test(s))return Math.round(parseFloat(s)*1e6);
+    if(/b/i.test(s))return Math.round(parseFloat(s)*1e9);
+    return parseInt(s)||0;
+  }
   if(snap.exists()){
     await window.XF.remove('posts/'+postId+'/likes/'+uid);
     el.classList.remove('liked');
-    const c=parseInt(el.textContent.replace(/\D/g,''))||1;
-    el.innerHTML=heartSVG(false)+(c>1?' '+(c-1):'');
+    const c=parseFormatted(el.textContent)||1;
+    const newC=Math.max(0,c-1);
+    el.innerHTML=heartSVG(false)+(newC>0?' '+formatCount(newC):'');
   }else{
     await window.XF.set('posts/'+postId+'/likes/'+uid,true);
     el.classList.add('liked');
-    const c=parseInt(el.textContent.replace(/\D/g,''))||0;
-    el.innerHTML=heartSVG(true)+' '+(c+1);
+    const c=parseFormatted(el.textContent)||0;
+    const newC=c+1;
+    el.innerHTML=heartSVG(true)+' '+formatCount(newC);
   }
 }
 async function rsvpEvent(postId){
@@ -669,9 +714,17 @@ async function acceptConnection(reqId,fromUid){
   await window.XF.update('users/'+fromUid,{followersCount:thF+1,followingCount:thFw+1});
   if(currentProfile){currentProfile.followersCount=myF+1;currentProfile.followingCount=myFw+1;}
   await window.XF.push('notifications/'+fromUid,{type:'connection_accepted',fromUid:myUid,fromName:currentProfile?.displayName||'Member',createdAt:window.XF.ts(),read:false});
-  showToast('Connection accepted!');renderNotifications();
+  showToast('Connection accepted!');
+  // Re-render notifications so Accept/Decline buttons become Connected state
+  renderNotifications();
 }
 async function declineConnection(reqId){await window.XF.update('connectionRequests/'+reqId,{status:'declined'});showToast('Request declined');renderNotifications();}
+async function acceptConnectionFromNotif(reqId,fromUid,btn){
+  // Disable buttons immediately for feedback
+  const container=btn?.closest('[id^="connBtns_"]');
+  if(container)container.innerHTML='<span style="color:var(--success);font-size:0.85rem;font-weight:600">✓ Connected</span>';
+  await acceptConnection(reqId,fromUid);
+}
 async function disconnect(uid){
   if(!currentUser)return;
   await window.XF.remove('connections/'+currentUser.uid+'/'+uid);
@@ -899,9 +952,14 @@ async function renderNotifications(){
   if(notifs.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">⍾</div><div class="empty-state-title">No notifications yet</div></div>`;return;}
   container.innerHTML=notifs.map(n=>{
     const u=n.read?'':'unread';
-    if(n.type==='connection_request')return`<div class="notif-item ${u}"><div class="notif-icon">⊙</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> wants to connect with you</div><div class="notif-time">${timeAgo(n.createdAt)}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnection('${n.reqId}','${n.fromUid}')">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div></div></div>`;
-    if(n.type==='connection_accepted')return`<div class="notif-item ${u}"><div class="notif-icon">⊕</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> accepted your connection request</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
-    return`<div class="notif-item ${u}"><div class="notif-icon">⍾</div><div style="flex:1"><div class="notif-text">${escapeHTML(n.text||'New notification')}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
+    if(n.type==='connection_request'){
+      // Check if already connected — if so show connected state instead of buttons
+      const alreadyConnected=n.reqId&&(window._connCache||{})[n.fromUid];
+      return`<div class="notif-item ${u}"><div class="notif-icon">🤝</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> wants to connect with you</div><div class="notif-time">${timeAgo(n.createdAt)}</div><div id="connBtns_${n.reqId}" style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnectionFromNotif('${n.reqId}','${n.fromUid}',this)">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div></div></div>`;
+    }
+    if(n.type==='connection_accepted')return`<div class="notif-item ${u}"><div class="notif-icon">✅</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> accepted your connection request</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
+    if(n.type==='new_message')return`<div class="notif-item ${u}" onclick="openDMWith('${n.fromUid}')"><div class="notif-icon">💬</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> sent you a message${n.preview?': '+escapeHTML(n.preview):''}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
+    return`<div class="notif-item ${u}"><div class="notif-icon">🔔</div><div style="flex:1"><div class="notif-text">${escapeHTML(n.text||'New notification')}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
   }).join('');
   // Mark read after 2s so user sees highlights first
   setTimeout(async()=>{
@@ -918,6 +976,12 @@ function startNotifWatch(){
     let unread=0;if(snap.exists())snap.forEach(c=>{if(!c.val().read)unread++;});
     ['navNotifBadge','mobileNotifBadge'].forEach(id=>{const b=$(id);if(!b)return;b.textContent=unread;b.style.display=unread>0?'flex':'none';});
   });
+}
+async function startMsgWatch(){
+  if(!currentUser)return;
+  // Poll unread DM count every 15s and on connection change
+  refreshMsgBadge();
+  setInterval(refreshMsgBadge,15000);
 }
 
 /* ══════════════════════════════════════════════
@@ -959,17 +1023,17 @@ async function renderConversations(){
     }).filter(Boolean).join('');
   }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';}
 }
+let _typingUnsubscribe=null,_typingTimer=null;
 async function openDMWith(uid){
   if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
+  if(_typingUnsubscribe){try{_typingUnsubscribe();}catch(e){}}_typingUnsubscribe=null;
   if(activePage!=='messages')showPage('messages');
   activeConvUid=uid;
   const snap=await window.XF.get('users/'+uid);const partner=snap.exists()?snap.val():null;
-  // Show DM full-page, hide list
   const lv=$('messagesListView'),dp=$('dmFullpage');
   if(lv)lv.style.display='none';
   if(!dp)return;
   dp.style.display='flex';
-  // Render header
   const hdr=$('dmFullpageHeader');
   if(hdr)hdr.innerHTML=`
     <div class="dm-back-btn" onclick="closeDMFullpage()">←</div>
@@ -977,31 +1041,151 @@ async function openDMWith(uid){
       ${avatarHTML(partner,'md')}
       <div>
         <div style="display:flex;align-items:center;gap:4px;font-weight:700">${escapeHTML(partner?.displayName||'Member')}${verifiedBadge(partner?.verified)}</div>
-        <div style="font-size:0.8rem;color:var(--text-dim)">@${escapeHTML(partner?.handle||'member')}</div>
+        <div style="font-size:0.8rem;color:var(--text-dim)" id="dmOnlineStatus">@${escapeHTML(partner?.handle||'member')}</div>
       </div>
     </div>`;
-  // Wire up send button uid
-  const dmInput=$('dmInput');if(dmInput){dmInput.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDMText(uid);}};}
+  const dmInput=$('dmInput');
+  if(dmInput){
+    dmInput.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDMText(uid);}};
+    dmInput.oninput=function(){sendTypingIndicator(uid);};
+    dmInput.value='';
+  }
   const sendBtn=dp.querySelector('.dm-send-btn');if(sendBtn)sendBtn.onclick=()=>sendDMText(uid);
-  const imgInput=$('dmImgInput');if(imgInput)imgInput.onchange=function(){sendDMImage(this,uid);};
-  // Listen to messages
+  const imgInput=$('dmImgInput');if(imgInput){imgInput.value='';imgInput.onchange=function(){handleDMImagePreview(this,uid);};}
   const msgEl=$('dmMessages');
   const convId=[currentUser.uid,uid].sort().join('_');
+  // Mark messages read
+  markMessagesRead(convId);
+  // Listen for partner typing
+  _typingUnsubscribe=window.XF.on('typing/'+convId+'/'+uid,snap=>{
+    const statusEl=$('dmOnlineStatus');if(!statusEl)return;
+    if(snap.exists()&&snap.val()===true){
+      statusEl.textContent='typing…';statusEl.style.color='var(--accent)';
+    }else{
+      statusEl.textContent='@'+escapeHTML(partner?.handle||'member');statusEl.style.color='var(--text-dim)';
+    }
+  });
+  // Live messages
   msgUnsubscribe=window.XF.on('dms/'+convId,snap=>{
     const msgs=[];if(snap.exists())snap.forEach(c=>msgs.push({id:c.key,...c.val()}));
     if(!msgEl)return;
     if(msgs.length===0){msgEl.innerHTML=`<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>`;return;}
+    markMessagesRead(convId);
     msgEl.innerHTML=msgs.map(m=>{
       const isMe=m.senderUid===currentUser.uid;
-      const imgHTML=m.imageUrl?`<img src="${escapeHTML(m.imageUrl)}" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo">`:''
+      const imgHTML=m.imageUrl?`<img src="${escapeHTML(m.imageUrl)}" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo">`:'';
       const txtHTML=m.text?`<span>${escapeHTML(m.text)}</span>`:'';
-      return`<div class="chat-msg${isMe?' me':' them'}">${imgHTML}${txtHTML}</div>`;
+      const ts=m.createdAt?`<span class="msg-time">${timeAgo(m.createdAt)}</span>`:'';
+      let statusMark='';
+      if(isMe){
+        const isRead=m.readBy&&Object.keys(m.readBy).some(k=>k!==currentUser.uid);
+        statusMark=isRead?`<span class="msg-tick read" title="Read">✓✓</span>`:`<span class="msg-tick sent" title="Sent">✓✓</span>`;
+      }
+      const deleteAttr=isMe?`data-msgid="${m.id}" data-convid="${convId}" oncontextmenu="showMsgDeleteMenu(event,this)" ontouchstart="startMsgHold(event,this)" ontouchend="cancelMsgHold()" ontouchmove="cancelMsgHold()"`:'';
+      return`<div class="chat-msg-wrap${isMe?' me':' them'}" ${deleteAttr}>
+        ${!isMe?`<div class="chat-msg-avatar">${avatarHTML(partner,'sm')}</div>`:''}
+        <div class="chat-msg-col">
+          <div class="chat-msg${isMe?' me':' them'}">${imgHTML}${txtHTML}</div>
+          <div class="msg-meta${isMe?' me':''}">${ts}${statusMark}</div>
+        </div>
+      </div>`;
     }).join('');
     msgEl.scrollTop=msgEl.scrollHeight;
   });
 }
+function sendTypingIndicator(uid){
+  if(!currentUser||!uid)return;
+  const convId=[currentUser.uid,uid].sort().join('_');
+  window.XF.set('typing/'+convId+'/'+currentUser.uid,true).catch(()=>{});
+  clearTimeout(_typingTimer);
+  _typingTimer=setTimeout(()=>{window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});},2500);
+}
+async function markMessagesRead(convId){
+  if(!currentUser)return;
+  try{
+    const snap=await window.XF.get('dms/'+convId);if(!snap.exists())return;
+    const updates={};
+    snap.forEach(c=>{
+      const m=c.val();
+      if(m.senderUid!==currentUser.uid&&(!m.readBy||!m.readBy[currentUser.uid])){
+        updates['dms/'+convId+'/'+c.key+'/readBy/'+currentUser.uid]=true;
+      }
+    });
+    if(Object.keys(updates).length>0){
+      await window.XF.multiUpdate(updates);
+      // Refresh badge
+      setTimeout(refreshMsgBadge,500);
+    }
+  }catch(e){}
+}
+async function refreshMsgBadge(){
+  if(!currentUser)return;
+  try{
+    const connSnap=await window.XF.get('connections/'+currentUser.uid);
+    if(!connSnap.exists())return;
+    const uids=Object.keys(connSnap.val());
+    let total=0;
+    await Promise.all(uids.map(async uid=>{
+      const convId=[currentUser.uid,uid].sort().join('_');
+      const dmSnap=await window.XF.get('dms/'+convId);if(!dmSnap.exists())return;
+      dmSnap.forEach(c=>{const m=c.val();if(m.senderUid!==currentUser.uid&&(!m.readBy||!m.readBy[currentUser.uid]))total++;});
+    }));
+    ['navMsgBadge','mobileMsgBadge'].forEach(id=>{const b=$(id);if(!b)return;b.textContent=total;b.style.display=total>0?'flex':'none';});
+  }catch(e){}
+}
+function handleDMImagePreview(inputEl,uid){
+  if(!inputEl?.files?.[0])return;
+  const preview=$('dmImgPreview');
+  if(preview){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      preview.innerHTML=`<div class="img-preview-wrap" style="margin:6px 0 0 4px"><img src="${e.target.result}" style="max-width:120px;max-height:120px;border-radius:8px"><div class="img-preview-remove" onclick="cancelDMImage()">✕</div></div>`;
+    };
+    reader.readAsDataURL(inputEl.files[0]);
+  }else{
+    sendDMImage(inputEl,uid);
+  }
+}
+function cancelDMImage(){const p=$('dmImgPreview');if(p)p.innerHTML='';const i=$('dmImgInput');if(i)i.value='';}
+
+/* ── Message delete (long-press / right-click on own messages) ── */
+let _msgHoldTimer=null;
+function startMsgHold(e,el){
+  _msgHoldTimer=setTimeout(()=>{showMsgDeleteMenu(e,el);},500);
+}
+function cancelMsgHold(){clearTimeout(_msgHoldTimer);}
+function showMsgDeleteMenu(e,el){
+  e.preventDefault();e.stopPropagation();
+  // Remove any existing menu
+  document.querySelectorAll('.msg-ctx-menu').forEach(m=>m.remove());
+  const msgId=el.dataset.msgid,convId=el.dataset.convid;
+  if(!msgId||!convId)return;
+  const menu=document.createElement('div');
+  menu.className='msg-ctx-menu';
+  menu.innerHTML=`<div class="msg-ctx-item delete" onclick="deleteDMMessage('${convId}','${msgId}')">🗑 Delete message</div>`;
+  // Position near tap/click
+  const rect=el.getBoundingClientRect();
+  menu.style.cssText=`position:fixed;top:${Math.min(rect.bottom+4,window.innerHeight-60)}px;${rect.left>window.innerWidth/2?'right:'+(window.innerWidth-rect.right)+'px':'left:'+rect.left+'px'};z-index:9999`;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click',function h(){menu.remove();document.removeEventListener('click',h);},{once:true}),50);
+}
+async function deleteDMMessage(convId,msgId){
+  document.querySelectorAll('.msg-ctx-menu').forEach(m=>m.remove());
+  try{
+    // Delete silently — no notification to recipient
+    await window.XF.remove('dms/'+convId+'/'+msgId);
+    // No toast — silent delete like WhatsApp
+  }catch(e){showToast('Could not delete message');}
+}
 function closeDMFullpage(){
   if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
+  if(_typingUnsubscribe){try{_typingUnsubscribe();}catch(e){}}_typingUnsubscribe=null;
+  if(_typingTimer){clearTimeout(_typingTimer);_typingTimer=null;}
+  // Clear typing flag for ourselves
+  if(currentUser&&activeConvUid){
+    const convId=[currentUser.uid,activeConvUid].sort().join('_');
+    window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
+  }
   activeConvUid=null;
   const lv=$('messagesListView'),dp=$('dmFullpage');
   if(dp)dp.style.display='none';
@@ -1021,8 +1205,21 @@ async function sendDMText(uid){
     const remaining=DAILY_LIMIT-sentToday-1;if(remaining<=3)showToast(remaining+' free messages remaining today');
   }
   if(input)input.value='';
+  // Clear typing
   const convId=[currentUser.uid,uid].sort().join('_');
-  await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts()});
+  window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
+  clearTimeout(_typingTimer);
+  // Send message with readBy for sender already set
+  await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
+  // Notify recipient
+  notifyDMRecipient(uid,text);
+  refreshMsgBadge();
+}
+async function notifyDMRecipient(toUid,preview){
+  try{
+    // Check if they already have the conversation open — if not, badge them
+    await window.XF.push('notifications/'+toUid,{type:'new_message',fromUid:currentUser.uid,fromName:currentProfile?.displayName||'Member',preview:(preview||'').slice(0,40),createdAt:window.XF.ts(),read:false});
+  }catch(e){}
 }
 async function sendDMImage(inputEl,uid){
   uid=uid||activeConvUid;if(!uid||!currentUser||!inputEl?.files?.[0])return;
@@ -1030,8 +1227,11 @@ async function sendDMImage(inputEl,uid){
   try{
     const r=await window.XCloud.upload(inputEl.files[0],'dm_images');
     const convId=[currentUser.uid,uid].sort().join('_');
-    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,imageUrl:r.url,text:'',createdAt:window.XF.ts()});
+    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,imageUrl:r.url,text:'',createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
     inputEl.value='';
+    const p=$('dmImgPreview');if(p)p.innerHTML='';
+    notifyDMRecipient(uid,'📷 Photo');
+    refreshMsgBadge();
   }catch(e){showToast('Image upload failed');}
 }
 async function sendDM(toUid){await sendDMText(toUid);}/* legacy alias */
@@ -1068,7 +1268,7 @@ function businessPostHTML(post,author){
         </div>
       </div>
       <div class="post-actions" onclick="event.stopPropagation()">
-        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+likeCount:''}</div>
+        <div class="post-action like${isLiked?' liked':''}" onclick="toggleLike('${post.id}',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isLiked?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${likeCount>0?' '+formatCount(likeCount):''}</div>
         <div class="post-action share" onclick="sharePost('${post.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
       </div>
     </div>
@@ -1100,7 +1300,11 @@ async function confirmInvestment(postId){
   if(!amount||amount<=0)return showToast('Please select or enter an amount');
   const snap=await window.XF.get('posts/'+postId);if(!snap.exists())return;
   const post={id:postId,...snap.val()};
-  try{await window.XF.set('investments/'+postId+'/'+currentUser.uid,{uid:currentUser.uid,name:currentProfile?.displayName,email:currentUser.email,amount,currency:post.bizCurrency||'EUR',status:'pending',createdAt:window.XF.ts()});}catch(e){}
+  // Check user hasn't already invested (prevent duplicate counts)
+  const existingInv=await window.XF.get('investments/'+postId+'/'+currentUser.uid);
+  if(existingInv.exists()&&existingInv.val().status==='paid'){
+    showToast('You have already invested in this opportunity');return;
+  }
   closeModal('investModal');showToast('Redirecting to payment…');
   setTimeout(()=>launchFlutterwave(post,amount),600);
 }
@@ -1177,18 +1381,37 @@ async function loadAdminUsers(){
     const snap=await window.XF.get('users');allUsersCache=[];
     if(snap.exists())snap.forEach(c=>{const v=c.val();if(v&&typeof v==='object')allUsersCache.push({id:c.key,uid:v.uid||c.key,...v});});
     allUsersCache.sort((a,b)=>(b.joinedAt||0)-(a.joinedAt||0));
-    renderAdminUsers(allUsersCache);
+    // Fetch unread message counts per user
+    const unreadMap={};
+    await Promise.all(allUsersCache.map(async u=>{
+      try{
+        const dmsSnap=await window.XF.get('dms');
+        if(!dmsSnap.exists())return;
+        let count=0;
+        dmsSnap.forEach(conv=>{
+          if(!conv.key.includes(u.uid))return;
+          conv.forEach(msg=>{
+            const m=msg.val();
+            if(m.senderUid!==u.uid&&(!m.readBy||!m.readBy[u.uid]))count++;
+          });
+        });
+        if(count>0)unreadMap[u.uid]=count;
+      }catch(e){}
+    }));
+    renderAdminUsers(allUsersCache,unreadMap);
     const ce=$('adminUserCount');if(ce)ce.textContent=allUsersCache.length+' members';
   }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load users</div></div>';}
 }
-function renderAdminUsers(users){
+function renderAdminUsers(users,unreadMap={}){
   const container=$('adminUserList');if(!container)return;
   if(users.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">No users found</div></div>';return;}
-  container.innerHTML=users.map(u=>`
+  container.innerHTML=users.map(u=>{
+    const unread=unreadMap[u.uid]||0;
+    return`
     <div class="admin-user-card" id="adminCard-${u.uid}">
       ${avatarHTML(u,'md')}
       <div class="admin-user-info">
-        <div class="admin-user-name">${escapeHTML(u.displayName||'Member')} ${u.verified?'<span style="color:var(--accent);font-size:0.8rem">✓ Verified</span>':'<span style="color:var(--text-muted);font-size:0.8rem">Unverified</span>'}</div>
+        <div class="admin-user-name">${escapeHTML(u.displayName||'Member')} ${u.verified?'<span style="color:var(--accent);font-size:0.8rem">✓ Verified</span>':'<span style="color:var(--text-muted);font-size:0.8rem">Unverified</span>'}${unread>0?`<span style="background:var(--accent);color:#fff;font-size:0.7rem;padding:1px 7px;border-radius:9999px;margin-left:6px">${unread} unread msg${unread>1?'s':''}</span>`:''}</div>
         <div class="admin-user-meta">@${escapeHTML(u.handle||'?')} · ${escapeHTML(u.email||'')} · ${formatCount(u.followersCount||0)} followers</div>
       </div>
       <div class="admin-user-actions">
@@ -1197,7 +1420,7 @@ function renderAdminUsers(users){
         ${u.verified?`<button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="adminToggleVerify('${u.uid}',false)">Unverify</button>`:`<button class="btn btn-sm" style="background:var(--success);color:#fff" onclick="adminToggleVerify('${u.uid}',true)">Verify</button>`}
         <button class="btn btn-sm btn-danger" onclick="adminDeleteUser('${u.uid}')">Delete</button>
       </div>
-    </div>`).join('');
+    </div>`}).join('');
 }
 function adminSearchUsers(query){if(!query){renderAdminUsers(allUsersCache);return;}const q=query.toLowerCase();renderAdminUsers(allUsersCache.filter(u=>(u.displayName||'').toLowerCase().includes(q)||(u.handle||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q)));}
 async function adminSetFollowers(uid){const input=$('flwInput-'+uid);const val=parseInt(input.value);if(isNaN(val)||val<0)return showToast('Enter a valid number');try{await window.XF.update('users/'+uid,{followersCount:val});const u=allUsersCache.find(x=>x.uid===uid);if(u)u.followersCount=val;showToast('Followers updated!');}catch(err){showToast('Failed to update followers');}}
@@ -1238,9 +1461,7 @@ function injectAdminTools(){
     <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">AI — Groq Key</div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input id="groqKeyInput" class="form-input" type="password" placeholder="Paste gsk_... key" style="flex:1;font-size:0.82rem" onfocus="if(this.value.startsWith('•'))this.value=''"><button class="btn btn-accent btn-sm" onclick="saveGroqKey()">Save</button></div>
     <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px">Free key from console.groq.com</div>
-    <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">Flutterwave Public Key</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input id="flwKeyInput" class="form-input" type="password" placeholder="FLWPUBK-live-..." style="flex:1;font-size:0.82rem" onfocus="if(this.value.startsWith('•'))this.value=''"><button class="btn btn-accent btn-sm" onclick="saveFlwKey()">Save</button></div>
-    <div style="font-size:0.72rem;color:var(--text-dim)">Test: FLWPUBK-xxx-X · Live: FLWPUBK-live-xxx</div>`;
+    <div style="font-size:0.78rem;color:var(--success);padding:8px;background:rgba(0,186,124,0.08);border-radius:6px;margin-bottom:4px">✓ Flutterwave key is hardcoded and active (FLWPUBK-9b3e...)</div>`;
   adminContent.insertBefore(keyPanel,adminContent.firstChild);
   const btn=document.createElement('div');
   btn.style.cssText='margin-bottom:12px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px';
