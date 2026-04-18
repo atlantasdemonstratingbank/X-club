@@ -172,7 +172,7 @@ function showPage(name,opts={}){
   const pg=$('page-'+name);if(pg)pg.classList.add('active');
   activePage=name;updateNavActive();window.scrollTo(0,0);
   if(name==='feed')renderFeed();
-  else if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;
+  else{if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;}
   if(name==='discover')renderDiscover();
   if(name==='notifications')renderNotifications();
   if(name==='messages')renderConversations();
@@ -975,7 +975,7 @@ async function renderUserProfile(uid){
     if(currentUser){
       const cs=await window.XF.get('connections/'+currentUser.uid+'/'+uid);
       if(cs.exists())connStatus='connected';
-      else{const rs=await window.XF.get('connectionRequests/'+currentUser.uid+'_'+uid);if(rs.exists()&&rs.val().status==='pending')connStatus='pending';}
+      else{const rs=await window.XF.get('connectionRequests/'+uid+'_'+currentUser.uid);if(rs.exists()&&rs.val().status==='pending')connStatus='pending';}
     }
     const postsSnap=await window.XF.get('posts');const posts=[];
     if(postsSnap.exists())postsSnap.forEach(c=>{const p=c.val();if(p.authorUid===uid)posts.push({id:c.key,...p});});
@@ -1077,11 +1077,13 @@ async function renderNotifications(){
     return`<div class="notif-item ${u}"><div class="notif-icon">🔔</div><div style="flex:1"><div class="notif-text">${escapeHTML(n.text||'New notification')}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
   }).join('');
 
-  // Mark ALL as read after 2s — including new_message notifs so badge resets properly
+  // Mark ALL as read after 2s — single multiUpdate so Firebase fires listener only once
   setTimeout(async()=>{
     const unread=notifs.filter(n=>!n.read);
     if(unread.length>0){
-      await Promise.all(unread.map(n=>window.XF.update('notifications/'+currentUser.uid+'/'+n.id,{read:true})));
+      const updates={};
+      unread.forEach(n=>{updates['notifications/'+currentUser.uid+'/'+n.id+'/read']=true;});
+      await window.XF.multiUpdate(updates);
       ['navNotifBadge','mobileNotifBadge'].forEach(id=>{const b=$(id);if(b){b.textContent='0';b.style.display='none';}});
     }
   },2000);
@@ -1195,11 +1197,13 @@ async function openDMWith(uid){
     }
   });
   // Live messages
+  let _markReadPending=false;
   msgUnsubscribe=window.XF.on('dms/'+convId,snap=>{
     const msgs=[];if(snap.exists())snap.forEach(c=>msgs.push({id:c.key,...c.val()}));
     if(!msgEl)return;
     if(msgs.length===0){msgEl.innerHTML=`<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>`;return;}
-    markMessagesRead(convId);
+    // Mark read outside listener to avoid infinite loop (read write → listener fires → read write…)
+    if(!_markReadPending){_markReadPending=true;setTimeout(()=>{markMessagesRead(convId);_markReadPending=false;},800);}
     msgEl.innerHTML=msgs.map(m=>{
       const isMe=m.senderUid===currentUser.uid;
       const imgHTML=m.imageUrl?`<img src="${escapeHTML(m.imageUrl)}" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo">`:'';
@@ -1327,10 +1331,11 @@ async function sendDMText(uid){
   if(!currentProfile?.verified){
     const today=new Date().toISOString().slice(0,10);
     const limitKey='xclub_msg_'+currentUser.uid+'_'+today;
-    const sentToday=parseInt(localStorage.getItem(limitKey)||'0');
+    let sentToday=0;
+    try{sentToday=parseInt(localStorage.getItem(limitKey)||'0');}catch(e){sentToday=0;}
     const DAILY_LIMIT=10;
     if(sentToday>=DAILY_LIMIT){showToast('Message limit reached — get verified for unlimited messages');return;}
-    localStorage.setItem(limitKey,String(sentToday+1));
+    try{localStorage.setItem(limitKey,String(sentToday+1));}catch(e){}
     const remaining=DAILY_LIMIT-sentToday-1;if(remaining<=3)showToast(remaining+' free messages remaining today');
   }
   // Clear input immediately for responsiveness

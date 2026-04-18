@@ -23,10 +23,6 @@ async function xUploadImage(file, folder = 'x_uploads', onProgress = () => {}) {
   onProgress(5);
   const compressed = await compressImage(file, preset);
   onProgress(40);
-  const maxBytes = preset.maxKB * 1024;
-  if (compressed.size > maxBytes) {
-    throw new Error(`Image still ${Math.round(compressed.size/1024)} KB after compression. Please use a smaller image.`);
-  }
   const fd = new FormData();
   fd.append('file',          compressed);
   fd.append('upload_preset', CLOUDINARY.uploadPreset);
@@ -43,7 +39,26 @@ async function xUploadImage(file, folder = 'x_uploads', onProgress = () => {}) {
 }
 
 async function compressImage(file, preset) {
-  const { maxW, maxH, quality } = preset;
+  const { maxW, maxH, maxKB } = preset;
+  const maxBytes = maxKB * 1024;
+  // Try progressively lower quality until under maxKB (min quality 0.20)
+  const qualities = [preset.quality, 0.60, 0.50, 0.40, 0.30, 0.20];
+  // Also try at half dimensions if quality alone isn't enough
+  const dimensionScales = [1.0, 0.75, 0.5];
+
+  for (const scale of dimensionScales) {
+    const scaledMaxW = Math.round(maxW * scale);
+    const scaledMaxH = Math.round(maxH * scale);
+    for (const quality of qualities) {
+      const result = await _compressOnce(file, scaledMaxW, scaledMaxH, quality);
+      if (result.size <= maxBytes) return result;
+    }
+  }
+  // Last resort: smallest scale + lowest quality — upload whatever we have
+  return await _compressOnce(file, Math.round(maxW * 0.4), Math.round(maxH * 0.4), 0.20);
+}
+
+async function _compressOnce(file, maxW, maxH, quality) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
