@@ -1468,16 +1468,19 @@ body.theme-light .verified-badge { background: #b8860b; }
   min-height: 100vh;
   background: #000;
   overflow: hidden;
+}
+#page-landing.active {
   display: flex;
   flex-direction: column;
 }
 
 /* ── Animated background ── */
 .landing-bg {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
 }
 
 /* Gold grid lines */
