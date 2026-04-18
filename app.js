@@ -172,7 +172,7 @@ function showPage(name,opts={}){
   const pg=$('page-'+name);if(pg)pg.classList.add('active');
   activePage=name;updateNavActive();window.scrollTo(0,0);
   if(name==='feed')renderFeed();
-  else{if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;}
+  else _teardownFeed();
   if(name==='discover')renderDiscover();
   if(name==='notifications')renderNotifications();
   if(name==='messages')renderConversations();
@@ -351,34 +351,65 @@ function initiatePayment(){
    FEED  (real-time listener)
 ══════════════════════════════════════════════ */
 let _feedUnsubscribe=null;
+
+function _teardownFeed(){
+  if(_feedUnsubscribe){
+    try{_feedUnsubscribe();}catch(e){}
+    _feedUnsubscribe=null;
+  }
+}
+
 function renderFeed(){
-  const container=$('feedPosts');if(!container)return;
-  // Tear down any previous listener
-  if(_feedUnsubscribe){try{_feedUnsubscribe();}catch(e){}}_feedUnsubscribe=null;
+  const container=$('feedPosts');
+  if(!container)return;
+  // Always tear down old listener before creating a new one
+  _teardownFeed();
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
-  _feedUnsubscribe=window.XF.on('posts',async snap=>{
+
+  const cb=async function(snap){
     try{
+      // Fetch connections and blocked list fresh on every listener fire
+      const blockedUids=await getBlockedUids();
+      let connUids=[];
+      if(feedTab==='following'&&currentUser){
+        const connSnap=await window.XF.get('connections/'+currentUser.uid);
+        connUids=connSnap.exists()?Object.keys(connSnap.val()):[];
+      }
+
       let posts=[];
       if(snap.exists())snap.forEach(c=>posts.push({id:c.key,...c.val()}));
       posts.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      // Filter out posts from blocked users
-      const blockedUids=await getBlockedUids();
+
+      // Filter blocked
       if(blockedUids.size>0)posts=posts.filter(p=>!blockedUids.has(p.authorUid));
+
+      // Filter following tab
       if(feedTab==='following'&&currentUser){
-        const connSnap=await window.XF.get('connections/'+currentUser.uid);
-        const connUids=connSnap.exists()?Object.keys(connSnap.val()):[];
         posts=posts.filter(p=>connUids.includes(p.authorUid)||p.authorUid===CLAUDE_ENGINEER_UID);
-        if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing from connections</div><div class="empty-state-desc">Connect with members to see their posts here</div></div>`;return;}
+        if(posts.length===0){
+          container.innerHTML='<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing from connections</div><div class="empty-state-desc">Connect with members to see their posts here</div></div>';
+          return;
+        }
       }
-      if(posts.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>`;return;}
+
+      if(posts.length===0){
+        container.innerHTML='<div class="empty-state"><div class="empty-state-icon">◪</div><div class="empty-state-title">Nothing here yet</div><div class="empty-state-desc">Be the first to post something</div></div>';
+        return;
+      }
+
       await _renderPostList(posts,container);
-    }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load posts</div></div>';}
-  });
+    }catch(err){
+      container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load posts</div></div>';
+    }
+  };
+
+  // Attach listener and store unsubscribe — the return value of XF.on IS the unsubscribe fn
+  _feedUnsubscribe=window.XF.on('posts',cb);
 }
+
 async function _renderPostList(posts,container){
   const uids=[...new Set(posts.map(p=>p.authorUid).filter(u=>u&&u!==CLAUDE_ENGINEER_UID))];
   const profiles={};
-  // Fetch each profile independently — one failure must not block the whole feed
   await Promise.allSettled(uids.map(async uid=>{
     try{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}catch(e){}
   }));
@@ -388,10 +419,12 @@ async function _renderPostList(posts,container){
     return postHTML(p,profiles[p.authorUid]);
   }).join('');
 }
+
 function switchFeedTab(tab,el){
   feedTab=tab;
   document.querySelectorAll('.feed-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');renderFeed();
+  el.classList.add('active');
+  renderFeed();
 }
 
 /* ── Post HTML ── */
@@ -974,8 +1007,16 @@ async function renderUserProfile(uid){
     let connStatus='none';
     if(currentUser){
       const cs=await window.XF.get('connections/'+currentUser.uid+'/'+uid);
-      if(cs.exists())connStatus='connected';
-      else{const rs=await window.XF.get('connectionRequests/'+uid+'_'+currentUser.uid);if(rs.exists()&&rs.val().status==='pending')connStatus='pending';}
+      if(cs.exists()){
+        connStatus='connected';
+      }else{
+        // Request could be stored as senderUid_receiverUid — check both directions
+        const rs1=await window.XF.get('connectionRequests/'+uid+'_'+currentUser.uid);
+        const rs2=await window.XF.get('connectionRequests/'+currentUser.uid+'_'+uid);
+        if((rs1.exists()&&rs1.val().status==='pending')||(rs2.exists()&&rs2.val().status==='pending')){
+          connStatus='pending';
+        }
+      }
     }
     const postsSnap=await window.XF.get('posts');const posts=[];
     if(postsSnap.exists())postsSnap.forEach(c=>{const p=c.val();if(p.authorUid===uid)posts.push({id:c.key,...p});});
@@ -1031,21 +1072,28 @@ function switchUserProfileTab(tab,el){
    NOTIFICATIONS
 ══════════════════════════════════════════════ */
 async function renderNotifications(){
-  const container=$('notifList');if(!container||!currentUser)return;
+  const container=$('notifList');
+  if(!container||!currentUser)return;
   container.innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
-  const snap=await window.XF.get('notifications/'+currentUser.uid);
-  const notifs=[];if(snap.exists())snap.forEach(c=>notifs.push({id:c.key,...c.val()}));
-  notifs.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  if(notifs.length===0){container.innerHTML=`<div class="empty-state"><div class="empty-state-icon">⍾</div><div class="empty-state-title">No notifications yet</div></div>`;return;}
 
-  // Pre-fetch connection + request status for all connection_request notifs in one pass
+  const snap=await window.XF.get('notifications/'+currentUser.uid);
+  const notifs=[];
+  if(snap.exists())snap.forEach(c=>notifs.push({id:c.key,...c.val()}));
+  notifs.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+
+  if(notifs.length===0){
+    container.innerHTML='<div class="empty-state"><div class="empty-state-icon">⍾</div><div class="empty-state-title">No notifications yet</div></div>';
+    // Still mark badge as 0 even if no notifications
+    ['navNotifBadge','mobileNotifBadge'].forEach(id=>{const b=$(id);if(b){b.textContent='0';b.style.display='none';}});
+    return;
+  }
+
+  // Pre-fetch connection + request status for all connection_request notifs
   const connReqNotifs=notifs.filter(n=>n.type==='connection_request'&&n.reqId&&n.fromUid);
   const connStatusMap={};
   await Promise.all(connReqNotifs.map(async n=>{
-    // Check if already connected
     const cs=await window.XF.get('connections/'+currentUser.uid+'/'+n.fromUid);
     if(cs.exists()){connStatusMap[n.reqId]='connected';return;}
-    // Check request status (accepted / declined / pending)
     const rs=await window.XF.get('connectionRequests/'+n.reqId);
     connStatusMap[n.reqId]=rs.exists()?rs.val().status:'pending';
   }));
@@ -1064,9 +1112,9 @@ async function renderNotifications(){
       const status=connStatusMap[n.reqId]||'pending';
       let actionHTML='';
       if(status==='connected'||status==='accepted'){
-        actionHTML=`<div style="margin-top:8px"><span style="color:var(--success);font-size:0.85rem;font-weight:600">✓ Connected</span></div>`;
+        actionHTML='<div style="margin-top:8px"><span style="color:var(--success);font-size:0.85rem;font-weight:600">✓ Connected</span></div>';
       }else if(status==='declined'){
-        actionHTML=`<div style="margin-top:8px"><span style="color:var(--text-dim);font-size:0.85rem">Request declined</span></div>`;
+        actionHTML='<div style="margin-top:8px"><span style="color:var(--text-dim);font-size:0.85rem">Request declined</span></div>';
       }else{
         actionHTML=`<div id="connBtns_${n.reqId}" style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnectionFromNotif('${n.reqId}','${n.fromUid}',this)">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div>`;
       }
@@ -1077,22 +1125,30 @@ async function renderNotifications(){
     return`<div class="notif-item ${u}"><div class="notif-icon">🔔</div><div style="flex:1"><div class="notif-text">${escapeHTML(n.text||'New notification')}</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
   }).join('');
 
-  // Mark ALL as read after 2s — single multiUpdate so Firebase fires listener only once
-  setTimeout(async()=>{
-    const unread=notifs.filter(n=>!n.read);
-    if(unread.length>0){
+  // Mark all unread as read using a SINGLE multiUpdate so Firebase triggers
+  // the startNotifWatch listener exactly once (not once per notification)
+  const unread=notifs.filter(n=>!n.read);
+  if(unread.length>0){
+    setTimeout(async()=>{
       const updates={};
       unread.forEach(n=>{updates['notifications/'+currentUser.uid+'/'+n.id+'/read']=true;});
-      await window.XF.multiUpdate(updates);
+      try{await window.XF.multiUpdate(updates);}catch(e){}
+      // Force badge to 0 immediately — the listener will confirm this after the write
       ['navNotifBadge','mobileNotifBadge'].forEach(id=>{const b=$(id);if(b){b.textContent='0';b.style.display='none';}});
-    }
-  },2000);
+    },1500);
+  }
 }
+
 function startNotifWatch(){
   if(!currentUser)return;
   window.XF.on('notifications/'+currentUser.uid,snap=>{
-    let unread=0;if(snap.exists())snap.forEach(c=>{if(!c.val().read)unread++;});
-    ['navNotifBadge','mobileNotifBadge'].forEach(id=>{const b=$(id);if(!b)return;b.textContent=unread;b.style.display=unread>0?'flex':'none';});
+    let unread=0;
+    if(snap.exists())snap.forEach(c=>{if(!c.val().read)unread++;});
+    ['navNotifBadge','mobileNotifBadge'].forEach(id=>{
+      const b=$(id);if(!b)return;
+      b.textContent=unread;
+      b.style.display=unread>0?'flex':'none';
+    });
   });
 }
 async function startMsgWatch(){
@@ -1103,11 +1159,11 @@ async function startMsgWatch(){
 }
 
 /* ══════════════════════════════════════════════
-   MESSAGES  (fully fixed — full-page DM)
+   MESSAGES  (full-page DM — rebuilt)
 ══════════════════════════════════════════════ */
 async function renderConversations(){
-  const container=$('convList');if(!container)return;
-  // Show list view, hide DM pane
+  const container=$('convList');
+  if(!container)return;
   const lv=$('messagesListView'),dp=$('dmFullpage');
   if(lv)lv.style.display='block';
   if(dp)dp.style.display='none';
@@ -1116,11 +1172,15 @@ async function renderConversations(){
   try{
     const connSnap=await window.XF.get('connections/'+currentUser.uid);
     if(!connSnap.exists()||Object.keys(connSnap.val()).length===0){
-      container.innerHTML=`<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>`;return;
+      container.innerHTML='<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>';
+      return;
     }
     const uids=Object.keys(connSnap.val());
     const profiles={};
-    await Promise.all(uids.map(async uid=>{const s=await window.XF.get('users/'+uid);if(s.exists())profiles[uid]=s.val();}));
+    await Promise.all(uids.map(async uid=>{
+      const s=await window.XF.get('users/'+uid);
+      if(s.exists())profiles[uid]=s.val();
+    }));
     const previews={};
     const unreadCounts={};
     await Promise.all(uids.map(async uid=>{
@@ -1152,19 +1212,30 @@ async function renderConversations(){
         </div>
       </div>`;
     }).filter(Boolean).join('');
-  }catch(err){container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';}
+  }catch(err){
+    container.innerHTML='<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';
+  }
 }
+
 let _typingUnsubscribe=null,_typingTimer=null;
+
 async function openDMWith(uid){
+  // Tear down any existing message listener
   if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
   if(_typingUnsubscribe){try{_typingUnsubscribe();}catch(e){}}_typingUnsubscribe=null;
+
   if(activePage!=='messages')showPage('messages');
   activeConvUid=uid;
-  const snap=await window.XF.get('users/'+uid);const partner=snap.exists()?snap.val():null;
+
+  const snap=await window.XF.get('users/'+uid);
+  const partner=snap.exists()?snap.val():null;
+
   const lv=$('messagesListView'),dp=$('dmFullpage');
   if(lv)lv.style.display='none';
   if(!dp)return;
   dp.style.display='flex';
+
+  // Render header
   const hdr=$('dmFullpageHeader');
   if(hdr)hdr.innerHTML=`
     <div class="dm-back-btn" onclick="closeDMFullpage()">←</div>
@@ -1175,36 +1246,62 @@ async function openDMWith(uid){
         <div style="font-size:0.8rem;color:var(--text-dim)" id="dmOnlineStatus">@${escapeHTML(partner?.handle||'member')}</div>
       </div>
     </div>`;
+
+  // Wire up input — assign uid via JS only, no inline HTML handlers
   const dmInput=$('dmInput');
   if(dmInput){
-    dmInput.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDMText(uid);}};
+    dmInput.onkeydown=function(e){
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDMText(uid);}
+    };
     dmInput.oninput=function(){sendTypingIndicator(uid);};
     dmInput.value='';
   }
-  const sendBtn=dp.querySelector('.dm-send-btn');if(sendBtn)sendBtn.onclick=()=>sendDMText(uid);
-  const imgInput=$('dmImgInput');if(imgInput){imgInput.value='';imgInput.onchange=function(){handleDMImagePreview(this,uid);};}
-  const msgEl=$('dmMessages');
+
+  // Wire up send button via JS only
+  const sendBtn=dp.querySelector('.dm-send-btn');
+  if(sendBtn)sendBtn.onclick=function(){sendDMText(uid);};
+
+  // Wire up image input
+  const imgInput=$('dmImgInput');
+  if(imgInput){
+    imgInput.value='';
+    imgInput.onchange=function(){handleDMImagePreview(this,uid);};
+  }
+
   const convId=[currentUser.uid,uid].sort().join('_');
-  // Mark messages read
+
+  // Do initial mark-as-read once when opening
   markMessagesRead(convId);
+
   // Listen for partner typing
-  _typingUnsubscribe=window.XF.on('typing/'+convId+'/'+uid,snap=>{
+  _typingUnsubscribe=window.XF.on('typing/'+convId+'/'+uid,function(tSnap){
     const statusEl=$('dmOnlineStatus');if(!statusEl)return;
-    if(snap.exists()&&snap.val()===true){
+    if(tSnap.exists()&&tSnap.val()===true){
       statusEl.textContent='typing…';statusEl.style.color='var(--accent)';
     }else{
       statusEl.textContent='@'+escapeHTML(partner?.handle||'member');statusEl.style.color='var(--text-dim)';
     }
   });
-  // Live messages
-  let _markReadPending=false;
-  msgUnsubscribe=window.XF.on('dms/'+convId,snap=>{
-    const msgs=[];if(snap.exists())snap.forEach(c=>msgs.push({id:c.key,...c.val()}));
+
+  // Live message listener
+  // Use a debounce flag so markMessagesRead is NOT called from inside the listener
+  // (calling it inside would write to dms/convId which re-triggers the listener → infinite loop)
+  let _readDebounce=null;
+  const msgEl=$('dmMessages');
+
+  msgUnsubscribe=window.XF.on('dms/'+convId,function(msgSnap){
+    const msgs=[];
+    if(msgSnap.exists())msgSnap.forEach(c=>msgs.push({id:c.key,...c.val()}));
+
     if(!msgEl)return;
-    if(msgs.length===0){msgEl.innerHTML=`<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>`;return;}
-    // Mark read outside listener to avoid infinite loop (read write → listener fires → read write…)
-    if(!_markReadPending){_markReadPending=true;setTimeout(()=>{markMessagesRead(convId);_markReadPending=false;},800);}
-    msgEl.innerHTML=msgs.map(m=>{
+
+    if(msgs.length===0){
+      msgEl.innerHTML='<div style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:40px">Start the conversation!</div>';
+      return;
+    }
+
+    // Render all messages
+    msgEl.innerHTML=msgs.map(function(m){
       const isMe=m.senderUid===currentUser.uid;
       const imgHTML=m.imageUrl?`<img src="${escapeHTML(m.imageUrl)}" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo">`:'';
       const txtHTML=m.text?`<span>${escapeHTML(m.text)}</span>`:'';
@@ -1212,7 +1309,7 @@ async function openDMWith(uid){
       let statusMark='';
       if(isMe){
         const isRead=m.readBy&&Object.keys(m.readBy).some(k=>k!==currentUser.uid);
-        statusMark=isRead?`<span class="msg-tick read" title="Read">✓✓</span>`:`<span class="msg-tick sent" title="Sent">✓✓</span>`;
+        statusMark=isRead?'<span class="msg-tick read" title="Read">✓✓</span>':'<span class="msg-tick sent" title="Sent">✓✓</span>';
       }
       const deleteAttr=isMe?`data-msgid="${m.id}" data-convid="${convId}" oncontextmenu="showMsgDeleteMenu(event,this)" ontouchstart="startMsgHold(event,this)" ontouchend="cancelMsgHold()" ontouchmove="cancelMsgHold()"`:'';
       return`<div class="chat-msg-wrap${isMe?' me':' them'}" ${deleteAttr}>
@@ -1223,20 +1320,31 @@ async function openDMWith(uid){
         </div>
       </div>`;
     }).join('');
+
     msgEl.scrollTop=msgEl.scrollHeight;
+
+    // Debounce mark-as-read: schedule it 1s after the last listener fire
+    // so we never write back to dms/ while the listener is still processing
+    clearTimeout(_readDebounce);
+    _readDebounce=setTimeout(function(){markMessagesRead(convId);},1000);
   });
 }
+
 function sendTypingIndicator(uid){
   if(!currentUser||!uid)return;
   const convId=[currentUser.uid,uid].sort().join('_');
   window.XF.set('typing/'+convId+'/'+currentUser.uid,true).catch(()=>{});
   clearTimeout(_typingTimer);
-  _typingTimer=setTimeout(()=>{window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});},2500);
+  _typingTimer=setTimeout(function(){
+    window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
+  },2500);
 }
+
 async function markMessagesRead(convId){
   if(!currentUser)return;
   try{
-    const snap=await window.XF.get('dms/'+convId);if(!snap.exists())return;
+    const snap=await window.XF.get('dms/'+convId);
+    if(!snap.exists())return;
     const updates={};
     snap.forEach(c=>{
       const m=c.val();
@@ -1246,11 +1354,11 @@ async function markMessagesRead(convId){
     });
     if(Object.keys(updates).length>0){
       await window.XF.multiUpdate(updates);
-      // Refresh badge
       setTimeout(refreshMsgBadge,500);
     }
   }catch(e){}
 }
+
 async function refreshMsgBadge(){
   if(!currentUser)return;
   try{
@@ -1261,17 +1369,25 @@ async function refreshMsgBadge(){
     await Promise.all(uids.map(async uid=>{
       const convId=[currentUser.uid,uid].sort().join('_');
       const dmSnap=await window.XF.get('dms/'+convId);if(!dmSnap.exists())return;
-      dmSnap.forEach(c=>{const m=c.val();if(m.senderUid!==currentUser.uid&&(!m.readBy||!m.readBy[currentUser.uid]))total++;});
+      dmSnap.forEach(c=>{
+        const m=c.val();
+        if(m.senderUid!==currentUser.uid&&(!m.readBy||!m.readBy[currentUser.uid]))total++;
+      });
     }));
-    ['navMsgBadge','mobileMsgBadge'].forEach(id=>{const b=$(id);if(!b)return;b.textContent=total;b.style.display=total>0?'flex':'none';});
+    ['navMsgBadge','mobileMsgBadge'].forEach(id=>{
+      const b=$(id);if(!b)return;
+      b.textContent=total;
+      b.style.display=total>0?'flex':'none';
+    });
   }catch(e){}
 }
+
 function handleDMImagePreview(inputEl,uid){
   if(!inputEl?.files?.[0])return;
   const preview=$('dmImgPreview');
   if(preview){
     const reader=new FileReader();
-    reader.onload=e=>{
+    reader.onload=function(e){
       preview.innerHTML=`<div class="img-preview-wrap" style="margin:6px 0 0 4px"><img src="${e.target.result}" style="max-width:120px;max-height:120px;border-radius:8px"><div class="img-preview-remove" onclick="cancelDMImage()">✕</div></div>`;
     };
     reader.readAsDataURL(inputEl.files[0]);
@@ -1279,42 +1395,39 @@ function handleDMImagePreview(inputEl,uid){
     sendDMImage(inputEl,uid);
   }
 }
-function cancelDMImage(){const p=$('dmImgPreview');if(p)p.innerHTML='';const i=$('dmImgInput');if(i)i.value='';}
+function cancelDMImage(){
+  const p=$('dmImgPreview');if(p)p.innerHTML='';
+  const i=$('dmImgInput');if(i)i.value='';
+}
 
 /* ── Message delete (long-press / right-click on own messages) ── */
 let _msgHoldTimer=null;
-function startMsgHold(e,el){
-  _msgHoldTimer=setTimeout(()=>{showMsgDeleteMenu(e,el);},500);
-}
+function startMsgHold(e,el){_msgHoldTimer=setTimeout(function(){showMsgDeleteMenu(e,el);},500);}
 function cancelMsgHold(){clearTimeout(_msgHoldTimer);}
 function showMsgDeleteMenu(e,el){
   e.preventDefault();e.stopPropagation();
-  // Remove any existing menu
   document.querySelectorAll('.msg-ctx-menu').forEach(m=>m.remove());
   const msgId=el.dataset.msgid,convId=el.dataset.convid;
   if(!msgId||!convId)return;
   const menu=document.createElement('div');
   menu.className='msg-ctx-menu';
   menu.innerHTML=`<div class="msg-ctx-item delete" onclick="deleteDMMessage('${convId}','${msgId}')">🗑 Delete message</div>`;
-  // Position near tap/click
   const rect=el.getBoundingClientRect();
   menu.style.cssText=`position:fixed;top:${Math.min(rect.bottom+4,window.innerHeight-60)}px;${rect.left>window.innerWidth/2?'right:'+(window.innerWidth-rect.right)+'px':'left:'+rect.left+'px'};z-index:9999`;
   document.body.appendChild(menu);
-  setTimeout(()=>document.addEventListener('click',function h(){menu.remove();document.removeEventListener('click',h);},{once:true}),50);
+  setTimeout(function(){document.addEventListener('click',function h(){menu.remove();document.removeEventListener('click',h);},{once:true});},50);
 }
 async function deleteDMMessage(convId,msgId){
   document.querySelectorAll('.msg-ctx-menu').forEach(m=>m.remove());
   try{
-    // Delete silently — no notification to recipient
     await window.XF.remove('dms/'+convId+'/'+msgId);
-    // No toast — silent delete like WhatsApp
   }catch(e){showToast('Could not delete message');}
 }
+
 function closeDMFullpage(){
   if(msgUnsubscribe){try{msgUnsubscribe();}catch(e){}msgUnsubscribe=null;}
   if(_typingUnsubscribe){try{_typingUnsubscribe();}catch(e){}}_typingUnsubscribe=null;
   if(_typingTimer){clearTimeout(_typingTimer);_typingTimer=null;}
-  // Clear typing flag for ourselves
   if(currentUser&&activeConvUid){
     const convId=[currentUser.uid,activeConvUid].sort().join('_');
     window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
@@ -1325,53 +1438,89 @@ function closeDMFullpage(){
   if(lv)lv.style.display='block';
   renderConversations();
 }
+
 async function sendDMText(uid){
-  uid=uid||activeConvUid;if(!uid||!currentUser)return;
-  const input=$('dmInput');const text=input?.value?.trim();if(!text)return;
+  uid=uid||activeConvUid;
+  if(!uid||!currentUser)return;
+  const input=$('dmInput');
+  const text=input?.value?.trim();
+  if(!text)return;
+
+  // Daily message limit for unverified users — wrapped in try/catch for iOS PWA safety
   if(!currentProfile?.verified){
     const today=new Date().toISOString().slice(0,10);
     const limitKey='xclub_msg_'+currentUser.uid+'_'+today;
     let sentToday=0;
     try{sentToday=parseInt(localStorage.getItem(limitKey)||'0');}catch(e){sentToday=0;}
     const DAILY_LIMIT=10;
-    if(sentToday>=DAILY_LIMIT){showToast('Message limit reached — get verified for unlimited messages');return;}
+    if(sentToday>=DAILY_LIMIT){
+      showToast('Message limit reached — get verified for unlimited messages');
+      return;
+    }
     try{localStorage.setItem(limitKey,String(sentToday+1));}catch(e){}
-    const remaining=DAILY_LIMIT-sentToday-1;if(remaining<=3)showToast(remaining+' free messages remaining today');
+    const remaining=DAILY_LIMIT-sentToday-1;
+    if(remaining<=3)showToast(remaining+' free messages remaining today');
   }
-  // Clear input immediately for responsiveness
+
+  // Clear input immediately so it feels responsive
   if(input)input.value='';
+
   const convId=[currentUser.uid,uid].sort().join('_');
   window.XF.set('typing/'+convId+'/'+currentUser.uid,false).catch(()=>{});
   clearTimeout(_typingTimer);
+
   try{
-    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,text,createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
+    await window.XF.push('dms/'+convId,{
+      senderUid:currentUser.uid,
+      text:text,
+      createdAt:window.XF.ts(),
+      readBy:{[currentUser.uid]:true}
+    });
     notifyDMRecipient(uid,text);
     refreshMsgBadge();
   }catch(err){
-    // Restore the unsent text so user doesn't lose it
+    // Restore unsent text so user doesn't lose it
     if(input)input.value=text;
     showToast('Failed to send — check your connection');
     console.error('[DM] send failed:',err);
   }
 }
+
 async function notifyDMRecipient(toUid,preview){
   try{
-    // Check if they already have the conversation open — if not, badge them
-    await window.XF.push('notifications/'+toUid,{type:'new_message',fromUid:currentUser.uid,fromName:currentProfile?.displayName||'Member',preview:(preview||'').slice(0,40),createdAt:window.XF.ts(),read:false});
+    await window.XF.push('notifications/'+toUid,{
+      type:'new_message',
+      fromUid:currentUser.uid,
+      fromName:currentProfile?.displayName||'Member',
+      preview:(preview||'').slice(0,40),
+      createdAt:window.XF.ts(),
+      read:false
+    });
   }catch(e){}
 }
+
 async function sendDMImage(inputEl,uid){
-  uid=uid||activeConvUid;if(!uid||!currentUser||!inputEl?.files?.[0])return;
+  uid=uid||activeConvUid;
+  if(!uid||!currentUser||!inputEl?.files?.[0])return;
   showToast('Uploading image…');
   try{
     const r=await window.XCloud.upload(inputEl.files[0],'dm_images');
     const convId=[currentUser.uid,uid].sort().join('_');
-    await window.XF.push('dms/'+convId,{senderUid:currentUser.uid,imageUrl:r.url,text:'',createdAt:window.XF.ts(),readBy:{[currentUser.uid]:true}});
+    await window.XF.push('dms/'+convId,{
+      senderUid:currentUser.uid,
+      imageUrl:r.url,
+      text:'',
+      createdAt:window.XF.ts(),
+      readBy:{[currentUser.uid]:true}
+    });
     inputEl.value='';
     const p=$('dmImgPreview');if(p)p.innerHTML='';
     notifyDMRecipient(uid,'📷 Photo');
     refreshMsgBadge();
-  }catch(e){showToast('Failed to send image — check your connection');console.error('[DM] image send failed:',e);}
+  }catch(e){
+    showToast('Failed to send image — check your connection');
+    console.error('[DM] image send failed:',e);
+  }
 }
 
 
