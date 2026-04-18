@@ -430,7 +430,7 @@
         <div class="dm-composer">
           <label class="dm-img-btn" title="Send image">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <input id="dmImgInput" type="file" accept="image/*" style="display:none" onchange="sendDMImage(this)">
+            <input id="dmImgInput" type="file" accept="image/*" style="display:none">
           </label>
           <div style="flex:1;display:flex;flex-direction:column;gap:4px">
             <div id="dmImgPreview"></div>
@@ -515,7 +515,7 @@
         <span class="search-icon">⌕</span>
         <input class="search-input" type="text" placeholder="Search X Musk Club" oninput="searchUsers(this.value)">
       </div>
-      <div id="searchResults" style="margin-top:8px;max-height:300px;overflow-y:auto"></div>
+      <div id="sidebarSearchResults" style="margin-top:8px;max-height:300px;overflow-y:auto"></div>
     </div>
 
     <div class="sidebar-section">
@@ -570,17 +570,6 @@
 </nav>
 
 <!-- ═══════════════════ MODALS ═══════════════════ -->
-
-<!-- POST DETAIL MODAL -->
-<div class="modal-overlay" id="postModal" onclick="if(event.target===this)closeModal('postModal')">
-  <div class="modal-card" style="max-width:600px">
-    <div class="modal-header">
-      <div class="modal-close" onclick="closeModal('postModal')">✕</div>
-      <h2>Post</h2>
-    </div>
-    <div id="postModalBody"></div>
-  </div>
-</div>
 
 <!-- NEW POST MODAL (mobile) -->
 <div class="modal-overlay" id="newPostModal" onclick="if(event.target===this)closeModal('newPostModal')">
@@ -678,7 +667,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://checkout.flutterwave.com/v3.js"></script>
+<script src="https://checkout.flutterwave.com/v3.js" async></script>
 <script src="firebase.js"></script>
 <script src="cloudinary.js"></script>
 <script src="app.js"></script>

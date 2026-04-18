@@ -26,8 +26,8 @@ async function callGroq({ system, user, maxTokens=1024 }) {
    FLUTTERWAVE
 ══════════════════════════════════════════════ */
 const MEMBERSHIP_PRICE=1999, MEMBERSHIP_CURRENCY='EUR';
-const FLW_PUBLIC_KEY='FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
-async function loadFlwKey(){/* Key is hardcoded — no override needed */}
+let FLW_PUBLIC_KEY='FLWPUBK-9b3e74ad491f4e5e52d93bd09e3da203-X';
+
 function currencySymbol(c){return{NGN:'₦',USD:'$',GBP:'£',EUR:'€',GHS:'₵',KES:'KSh',ZAR:'R',TZS:'TSh',UGX:'USh',RWF:'RF'}[c]||c||'€';}
 function launchFlutterwave(post,amount){
   const c=post.bizCurrency||'EUR',ref='xclub_'+post.id+'_'+currentUser?.uid+'_'+Date.now();
@@ -309,7 +309,6 @@ function initiatePayment(){
     },
     onclose:function(){}
   });
-}
 }
 
 /* ══════════════════════════════════════════════
@@ -740,7 +739,9 @@ async function disconnect(uid){
    SEARCH  (fixed duplicate ID issue)
 ══════════════════════════════════════════════ */
 async function searchUsers(query){
-  const containers=document.querySelectorAll('[id="searchResults"]');
+  const discoverContainer=$('searchResults');
+  const sidebarContainer=$('sidebarSearchResults');
+  const containers=[discoverContainer,sidebarContainer].filter(Boolean);
   if(!query||query.length<2){containers.forEach(c=>c.innerHTML='');return;}
   const snap=await window.XF.get('users');const results=[];
   if(snap.exists()){snap.forEach(c=>{const p=c.val();if(p.uid===currentUser?.uid)return;const q=query.toLowerCase();if((p.displayName||'').toLowerCase().includes(q)||(p.handle||'').toLowerCase().includes(q))results.push(p);});}
@@ -954,7 +955,6 @@ async function renderNotifications(){
     const u=n.read?'':'unread';
     if(n.type==='connection_request'){
       // Check if already connected — if so show connected state instead of buttons
-      const alreadyConnected=n.reqId&&(window._connCache||{})[n.fromUid];
       return`<div class="notif-item ${u}"><div class="notif-icon">🤝</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> wants to connect with you</div><div class="notif-time">${timeAgo(n.createdAt)}</div><div id="connBtns_${n.reqId}" style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="acceptConnectionFromNotif('${n.reqId}','${n.fromUid}',this)">Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${n.reqId}')">Decline</button></div></div></div>`;
     }
     if(n.type==='connection_accepted')return`<div class="notif-item ${u}"><div class="notif-icon">✅</div><div style="flex:1"><div class="notif-text"><strong>${escapeHTML(n.fromName)}</strong> accepted your connection request</div><div class="notif-time">${timeAgo(n.createdAt)}</div></div></div>`;
@@ -1234,7 +1234,7 @@ async function sendDMImage(inputEl,uid){
     refreshMsgBadge();
   }catch(e){showToast('Image upload failed');}
 }
-async function sendDM(toUid){await sendDMText(toUid);}/* legacy alias */
+
 
 /* ══════════════════════════════════════════════
    BUSINESS / INVESTMENT POSTS
@@ -1686,12 +1686,14 @@ function shareUserProfile(uid,displayName,handle){
 document.addEventListener('DOMContentLoaded',async()=>{
   applyStoredTheme();
   initLandingParticles();
+  // Safety net: if Firebase auth never fires within 8s, show the landing page
+  const loaderFailsafe=setTimeout(()=>{hideLoader();showPage('landing');},8000);
   try{
     await window.XFire.load();
-    loadFlwKey();
-    window.XF.onAuth(onAuthChange);
+    window.XF.onAuth(user=>{clearTimeout(loaderFailsafe);onAuthChange(user);});
     setTimeout(loadBizFeed,3000);
   }catch(err){
+    clearTimeout(loaderFailsafe);
     console.error('Firebase failed:',err);hideLoader();showPage('landing');
   }
 });
