@@ -12,12 +12,15 @@ function formatNotifTime(ts) {
   if (mins < 60) return mins + 'm ago';
   if (hours < 24) return hours + 'h ago';
   if (days < 7) return days + 'd ago';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' +
+    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 /* ─── BADGE HELPER ─── */
 function _setBadge(type, count) {
-  const ids = type === 'notif' ? ['navNotifBadge', 'mobileNotifBadge'] : ['navMsgBadge', 'mobileMsgBadge'];
+  const ids = type === 'notif'
+    ? ['navNotifBadge', 'mobileNotifBadge']
+    : ['navMsgBadge', 'mobileMsgBadge'];
   ids.forEach(id => {
     const b = $(id); if (!b) return;
     b.textContent = count > 99 ? '99+' : String(count);
@@ -50,54 +53,66 @@ async function renderNotifications() {
   container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
   const snap = await window.XF.get('notifications/' + currentUser.uid);
-  const notifs = [];
-  if (snap.exists()) snap.forEach(c => notifs.push({ id: c.key, ...c.val() }));
+  const allNotifs = [];
+  if (snap.exists()) snap.forEach(c => allNotifs.push({ id: c.key, ...c.val() }));
 
-  if (notifs.length === 0) {
+  if (allNotifs.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔔</div><div class="empty-state-title">No notifications yet</div></div>';
     _setBadge('notif', 0);
     return;
   }
 
-  // ── DEDUPLICATE ──
-  // connection_request: keep only latest per sender
-  // new_message: keep only latest per sender (collapse multiple messages into one row)
-  // connection_accepted: keep all
+  // Sort all notifications newest first BEFORE dedup so we keep the latest of each type
+  allNotifs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  // Deduplicate:
+  // - connection_request: one per sender (keep latest)
+  // - new_message: one per sender (keep latest, store count)
+  // - everything else: keep all
   const seenConnReq = new Set();
   const seenMsg = new Set();
+  const msgCounts = {}; // fromUid -> unread message count
 
-  // Sort newest first before dedup so we keep the latest
-  notifs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // Count unread messages per sender first
+  allNotifs.forEach(n => {
+    if (n.type === 'new_message' && !n.read) {
+      msgCounts[n.fromUid] = (msgCounts[n.fromUid] || 0) + 1;
+    }
+  });
 
-  const deduped = notifs.filter(n => {
+  const deduped = allNotifs.filter(n => {
     if (n.type === 'connection_request') {
       if (seenConnReq.has(n.fromUid)) return false;
-      seenConnReq.add(n.fromUid); return true;
+      seenConnReq.add(n.fromUid);
+      return true;
     }
     if (n.type === 'new_message') {
       if (seenMsg.has(n.fromUid)) return false;
-      seenMsg.add(n.fromUid); return true;
+      seenMsg.add(n.fromUid);
+      return true;
     }
-    return true;
+    return true; // keep all other types (connection_accepted, etc.)
   });
 
-  // Final sort: unread first, then newest
+  // Final sort: unread first, then newest within each group
   deduped.sort((a, b) => {
     if (!a.read && b.read) return -1;
     if (a.read && !b.read) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
-  // Fetch connection statuses for connection_request notifs
+  // Fetch connection statuses
   const connStatusMap = {};
-  await Promise.all(deduped.filter(n => n.type === 'connection_request' && n.reqId).map(async n => {
-    try {
-      const cs = await window.XF.get('connections/' + currentUser.uid + '/' + n.fromUid);
-      if (cs.exists()) { connStatusMap[n.reqId] = 'connected'; return; }
-      const rs = await window.XF.get('connectionRequests/' + n.reqId);
-      connStatusMap[n.reqId] = rs.exists() ? rs.val().status : 'pending';
-    } catch (e) { connStatusMap[n.reqId] = 'pending'; }
-  }));
+  await Promise.all(
+    deduped.filter(n => n.type === 'connection_request' && n.reqId).map(async n => {
+      try {
+        const cs = await window.XF.get('connections/' + currentUser.uid + '/' + n.fromUid);
+        if (cs.exists()) { connStatusMap[n.reqId] = 'connected'; return; }
+        const rs = await window.XF.get('connectionRequests/' + n.reqId);
+        connStatusMap[n.reqId] = rs.exists() ? rs.val().status : 'pending';
+      } catch (e) { connStatusMap[n.reqId] = 'pending'; }
+    })
+  );
 
   const hasUnread = deduped.some(n => !n.read);
 
@@ -136,34 +151,43 @@ async function renderNotifications() {
       }
       html += `<div class="${cls}" onclick="openUserProfile('${n.fromUid}',event)">
         <div class="notif-icon">🤝</div>
-        <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> wants to connect with you</div><div class="notif-time">${time}</div>${actionHTML}</div>
-        ${dot}</div>`;
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> wants to connect with you</div>
+          <div class="notif-time">${time}</div>
+          ${actionHTML}
+        </div>${dot}</div>`;
       return;
     }
 
     if (n.type === 'connection_accepted') {
       html += `<div class="${cls}" onclick="openUserProfile('${n.fromUid}',event)">
         <div class="notif-icon">✅</div>
-        <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> accepted your connection request</div><div class="notif-time">${time}</div></div>
-        ${dot}</div>`;
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> accepted your connection request</div>
+          <div class="notif-time">${time}</div>
+        </div>${dot}</div>`;
       return;
     }
 
     if (n.type === 'new_message') {
-      // Count total unread messages from this sender across all notifs
-      const totalFromSender = notifs.filter(x => x.type === 'new_message' && x.fromUid === n.fromUid && !x.read).length;
-      const countBadge = totalFromSender > 1 ? ` <span class="notif-msg-count">${totalFromSender}</span>` : '';
+      const count = msgCounts[n.fromUid] || 0;
+      const countBadge = count > 1 ? ` <span class="notif-msg-count">${count}</span>` : '';
       html += `<div class="${cls}" onclick="openDMWith('${n.fromUid}')">
         <div class="notif-icon">💬</div>
-        <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> sent you a message${n.preview ? ': <em>' + escapeHTML(n.preview) + '</em>' : ''}${countBadge}</div><div class="notif-time">${time}</div></div>
-        ${dot}</div>`;
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> sent you a message${n.preview ? ': <em>' + escapeHTML(n.preview) + '</em>' : ''}${countBadge}</div>
+          <div class="notif-time">${time}</div>
+        </div>${dot}</div>`;
       return;
     }
 
+    // Generic fallback
     html += `<div class="${cls}">
       <div class="notif-icon">🔔</div>
-      <div class="notif-body"><div class="notif-text">${escapeHTML(n.text || 'New notification')}</div><div class="notif-time">${time}</div></div>
-      ${dot}</div>`;
+      <div class="notif-body">
+        <div class="notif-text">${escapeHTML(n.text || 'New notification')}</div>
+        <div class="notif-time">${time}</div>
+      </div>${dot}</div>`;
   });
 
   container.innerHTML = html;
@@ -174,22 +198,25 @@ function startNotifWatch() {
   if (!currentUser) return;
   window.XF.on('notifications/' + currentUser.uid, snap => {
     if (!snap.exists()) { _setBadge('notif', 0); return; }
+
     const seenConnReq = new Set();
-    const seenMsgUid = new Set();
     let unread = 0;
-    // Collect into array sorted newest first so dedup keeps the latest
+
+    // Sort newest first so dedup keeps the latest
     const all = [];
     snap.forEach(c => all.push(c.val()));
     all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
     all.forEach(n => {
       if (n.read) return;
-      if (n.type === 'new_message') return; // msg badge handles this
+      if (n.type === 'new_message') return; // msg badge handles this separately
       if (n.type === 'connection_request') {
         if (seenConnReq.has(n.fromUid)) return;
         seenConnReq.add(n.fromUid);
       }
       unread++;
     });
+
     _setBadge('notif', unread);
     if (activePage === 'notifications') renderNotifications();
   });
@@ -197,14 +224,16 @@ function startNotifWatch() {
 
 /* ─── MSG BADGE WATCHER ─── */
 let _msgBadgeListeners = [];
-let _lastMsgKey = {}; // track last msg key per conv to detect truly new messages
+let _lastMsgKey = {};
 
 async function startMsgWatch() {
   if (!currentUser) return;
+
   window.XF.on('connections/' + currentUser.uid, async function (connSnap) {
     _msgBadgeListeners.forEach(fn => { try { fn(); } catch (e) {} });
     _msgBadgeListeners = [];
     if (!connSnap.exists()) { _setBadge('msg', 0); return; }
+
     const uids = Object.keys(connSnap.val());
     uids.forEach(uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
@@ -212,25 +241,27 @@ async function startMsgWatch() {
       const handler = async function (dmSnap) {
         refreshMsgBadge();
         // Refresh conv list if visible
-        if (activePage === 'messages' && $('messagesListView') && $('messagesListView').style.display !== 'none') {
+        if (activePage === 'messages' &&
+            $('messagesListView') &&
+            $('messagesListView').style.display !== 'none') {
           renderConversations();
         }
-        // Popup for new incoming message when not in that chat
+        // Show popup for new incoming message when not in that chat
         if (dmSnap.exists() && activeConvUid !== uid) {
           const msgs = [];
           dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-          // Get latest msg by createdAt
           msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
           const latest = msgs[msgs.length - 1];
-          if (latest && latest.senderUid !== currentUser.uid && (!latest.readBy || !latest.readBy[currentUser.uid])) {
-            if (_lastMsgKey[convId] !== latest.id) {
-              _lastMsgKey[convId] = latest.id;
-              try {
-                const pSnap = await window.XF.get('users/' + uid);
-                const profile = pSnap.exists() ? pSnap.val() : { displayName: 'New message', photoURL: '' };
-                showMsgPopup(uid, profile, latest.imageUrl ? '📷 Photo' : (latest.text || ''));
-              } catch (e) {}
-            }
+          if (latest &&
+              latest.senderUid !== currentUser.uid &&
+              (!latest.readBy || !latest.readBy[currentUser.uid]) &&
+              _lastMsgKey[convId] !== latest.id) {
+            _lastMsgKey[convId] = latest.id;
+            try {
+              const pSnap = await window.XF.get('users/' + uid);
+              const profile = pSnap.exists() ? pSnap.val() : { displayName: 'New message', photoURL: '' };
+              showMsgPopup(uid, profile, latest.imageUrl ? '📷 Photo' : (latest.text || ''));
+            } catch (e) {}
           }
         }
       };
@@ -267,6 +298,7 @@ function showMsgPopup(uid, profile, previewText) {
   const existing = document.querySelector('.msg-popup');
   if (existing) existing.remove();
   clearTimeout(_popupTimer);
+
   const popup = document.createElement('div');
   popup.className = 'msg-popup';
   popup.innerHTML = `
@@ -275,16 +307,30 @@ function showMsgPopup(uid, profile, previewText) {
       <div class="msg-popup-name">${escapeHTML(profile.displayName || 'New message')}</div>
       <div class="msg-popup-preview">${escapeHTML((previewText || '').slice(0, 60))}</div>
     </div>
-    <div class="msg-popup-close" onclick="event.stopPropagation();this.parentElement.remove()">✕</div>`;
-  popup.onclick = function (e) {
-    if (e.target.classList.contains('msg-popup-close')) return;
-    popup.remove();
+    <div class="msg-popup-close">✕</div>`;
+
+  // Tapping X closes only
+  popup.querySelector('.msg-popup-close').onclick = function (e) {
+    e.stopPropagation();
+    popup.classList.remove('visible');
+    setTimeout(() => popup.remove(), 350);
+    clearTimeout(_popupTimer);
+  };
+
+  // Tapping anywhere else opens chat
+  popup.onclick = function () {
+    popup.classList.remove('visible');
+    setTimeout(() => popup.remove(), 350);
+    clearTimeout(_popupTimer);
     openDMWith(uid);
   };
+
   document.body.appendChild(popup);
   requestAnimationFrame(() => popup.classList.add('visible'));
+
+  // Auto-dismiss after 5s
   _popupTimer = setTimeout(() => {
     popup.classList.remove('visible');
-    setTimeout(() => popup.remove(), 400);
+    setTimeout(() => popup.remove(), 350);
   }, 5000);
 }

@@ -32,19 +32,21 @@ async function renderConversations() {
       if (s.exists()) profiles[uid] = s.val();
     }));
 
-    // Fetch last 50 messages per conversation
+    // Fetch ALL messages per conversation, pick the true latest
+    // We use a simple fetch + JS sort — Firebase push keys are time-ordered
+    // so limitToLast(1) is unreliable when old messages had ServerValue.TIMESTAMP
     const previews = {}, unreadCounts = {}, lastTimes = {};
     await Promise.all(uids.map(async uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
-      const dmSnap = await window.XF.db.ref('dms/' + convId).limitToLast(50).once('value');
+      // Get all messages (no limit, no orderBy — Firebase key order ≈ insertion order)
+      const dmSnap = await window.XF.db.ref('dms/' + convId).once('value');
       if (dmSnap.exists()) {
         const msgs = [];
         dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-        // Sort by createdAt — Firebase push keys are time-ordered so this is reliable
-        // Messages with null/0 createdAt (old ServerValue.TIMESTAMP) go to front — ignore them for preview
+        // Sort by createdAt ascending; messages with createdAt=0/null sort to front
         msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-        // Find latest message that has a real timestamp
-        const withTs = msgs.filter(m => m.createdAt > 0);
+        // Pick latest — prefer messages with a real timestamp
+        const withTs = msgs.filter(m => (m.createdAt || 0) > 0);
         const latest = withTs.length > 0 ? withTs[withTs.length - 1] : msgs[msgs.length - 1];
         previews[uid] = latest;
         lastTimes[uid] = latest?.createdAt || 0;
