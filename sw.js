@@ -1,12 +1,24 @@
-/* sw.js — X Club Service Worker */
-const CACHE = 'xclub-v4';
+/* sw.js — X Club v7 — bump cache version to force refresh */
+const CACHE = 'xclub-v7';
 const ASSETS = [
   './index.html',
   './style.css',
-  './app.js',
   './firebase.js',
   './cloudinary.js',
   './manifest.json',
+  './config.js',
+  './utils.js',
+  './router.js',
+  './auth.js',
+  './feed.js',
+  './discover.js',
+  './profile.js',
+  './notifications.js',
+  './messages.js',
+  './business.js',
+  './sidebar.js',
+  './admin.js',
+  './boot.js',
 ];
 
 self.addEventListener('install', e => {
@@ -24,23 +36,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Only cache same-origin GET requests; pass through Firebase/Cloudinary/CDN calls
   const url = new URL(e.request.url);
   const isLocal = url.origin === self.location.origin;
   const isGet = e.request.method === 'GET';
-
   if (!isGet || !isLocal) { e.respondWith(fetch(e.request)); return; }
-
+  // Network first — always get fresh JS/CSS, fall back to cache offline
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const net = fetch(e.request).then(res => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached); // offline fallback
-      return cached || net;
-    })
+    fetch(e.request).then(res => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
