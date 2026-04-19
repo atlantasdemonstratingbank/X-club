@@ -1,203 +1,87 @@
-// messages.js — X Club v7 — Messenger-style DM. Clean rebuild.
+// messages.js — X Club v7
 'use strict';
 
-/* ════════════════════════════════════════════════════════
-   CONVERSATION LIST
-   - Sorted: unread first, then by latest message time
-   - Shows last message preview (correct, not first)
-   - Shows unread count badge on each row
-   - Live — refreshes when startMsgWatch detects changes
-════════════════════════════════════════════════════════ */
-async function renderConversations() {
-  const container = $('convList');
-  if (!container) return;
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE APPROACH — same as every real messenger (WhatsApp, Telegram, iMessage)
+   ─────────────────────────────────────────────────────────────────────────
+   Conv list + badge live in notifications.js (_convCache, _rebuildConvUI).
+   This file owns only the open DM chat view:
 
-  // Show list, hide DM fullpage
-  const lv = $('messagesListView'), dp = $('dmFullpage');
-  if (lv) lv.style.display = 'block';
-  if (dp) dp.style.display = 'none';
+   _dmMsgCache  — Map(msgId → msgObj) for the active conversation only.
+                  Populated by child_added (last 100) + child_changed + child_removed.
+                  Never re-fetched. Firebase pushes diffs.
+   _dmDoRender  — reads _dmMsgCache, sorts, builds HTML. Sync. No awaits.
+                  Debounced to 16ms so rapid child_added bursts = 1 paint.
+═══════════════════════════════════════════════════════════════════════════ */
 
-  if (!currentUser) { container.innerHTML = ''; return; }
-
-  container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-
-  try {
-    // 1. Get all my connections
-    const connSnap = await window.XF.get('connections/' + currentUser.uid);
-    if (!connSnap.exists() || !Object.keys(connSnap.val()).length) {
-      container.innerHTML = `<div class="empty-state" style="padding:40px 16px">
-        <div class="empty-state-icon">💬</div>
-        <div class="empty-state-title">No messages yet</div>
-        <div class="empty-state-desc">Connect with members to start chatting</div>
-      </div>`;
-      return;
-    }
-
-    const uids = Object.keys(connSnap.val());
-
-    // 2. Fetch profiles
-    const profiles = {};
-    await Promise.all(uids.map(async uid => {
-      try {
-        const s = await window.XF.get('users/' + uid);
-        if (s.exists()) profiles[uid] = s.val();
-      } catch (e) {}
-    }));
-
-    // 3. Fetch ALL messages for each conv — no limit, sort in JS to get true latest
-    const convData = {}; // uid -> { latest, unread, ts }
-    await Promise.all(uids.map(async uid => {
-      const convId = [currentUser.uid, uid].sort().join('_');
-      try {
-        const dmSnap = await window.XF.get('dms/' + convId);
-        if (!dmSnap.exists()) {
-          convData[uid] = { latest: null, unread: 0, ts: 0 };
-          return;
-        }
-        const msgs = [];
-        dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-
-        // Sort ascending by createdAt — handles both Date.now() and old null timestamps
-        msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-        // Latest = last message with a real timestamp, fallback to absolute last
-        const withTs = msgs.filter(m => (m.createdAt || 0) > 0);
-        const latest = withTs.length ? withTs[withTs.length - 1] : msgs[msgs.length - 1];
-
-        // Unread = messages from partner not yet read by me
-        const unread = msgs.filter(m =>
-          m.senderUid !== currentUser.uid &&
-          (!m.readBy || !m.readBy[currentUser.uid])
-        ).length;
-
-        convData[uid] = { latest, unread, ts: latest?.createdAt || 0 };
-      } catch (e) {
-        convData[uid] = { latest: null, unread: 0, ts: 0 };
-      }
-    }));
-
-    // 4. Sort uids: unread first, then by most recent message
-    uids.sort((a, b) => {
-      const au = convData[a].unread > 0, bu = convData[b].unread > 0;
-      if (au && !bu) return -1;
-      if (!au && bu) return 1;
-      return (convData[b].ts || 0) - (convData[a].ts || 0);
-    });
-
-    // 5. Render
-    container.innerHTML = uids.map(uid => {
-      const p = profiles[uid];
-      if (!p) return '';
-      const { latest, unread, ts } = convData[uid];
-      const previewText = latest
-        ? (latest.imageUrl ? '📷 Photo' : String(latest.text || '').slice(0, 50))
-        : 'Say hello!';
-      const timeStr = ts > 0 ? timeAgo(ts) : '';
-      const hasUnread = unread > 0;
-
-      return `<div class="conv-row${hasUnread ? ' conv-row-unread' : ''}" onclick="openDMWith('${uid}')">
-        <div class="conv-avatar-wrap">
-          ${avatarHTML(p, 'md')}
-          ${hasUnread ? `<div class="conv-avatar-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
-        </div>
-        <div class="conv-info">
-          <div class="conv-top">
-            <span class="conv-name${hasUnread ? ' conv-name-bold' : ''}">${escapeHTML(p.displayName || 'Member')}${verifiedBadge(p.verified)}</span>
-            <span class="conv-time${hasUnread ? ' conv-time-accent' : ''}">${timeStr}</span>
-          </div>
-          <div class="conv-bottom">
-            <span class="conv-preview${hasUnread ? ' conv-preview-bold' : ''}">${escapeHTML(previewText)}</span>
-            ${hasUnread ? `<span class="conv-badge">${unread > 99 ? '99+' : unread}</span>` : ''}
-          </div>
-        </div>
-      </div>`;
-    }).filter(Boolean).join('');
-
-  } catch (err) {
-    console.error('[Conversations]', err);
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';
-  }
-}
-
-/* ════════════════════════════════════════════════════════
-   DM FULLPAGE — MESSENGER STYLE
-   Features:
-   - Blue sender bubbles (right) / grey receiver (left)
-   - Real-time via child_added + child_changed + child_removed
-   - Date separators between days
-   - HH:MM timestamp on every bubble
-   - ✓✓ read receipts (grey = sent, blue = read)
-   - Reply to message (swipe-style bar)
-   - Emoji picker (30 emojis)
-   - Image send (photo only)
-   - Long-press / right-click context menu:
-       React (6 quick emojis)
-       Reply / Star / Copy / Delete (own only)
-   - Reaction pills under bubbles
-   - Starred message indicator
-   - Typing indicator
-   - Popup notification when message arrives while elsewhere
-════════════════════════════════════════════════════════ */
-
-let _dmPartner = null;
-let _dmTypingOff = null;
+let _dmPartner    = null;
+let _dmTypingOff  = null;
 let _dmTypingTimer = null;
-let _dmMsgOff = null;     // unsubscribe fn for message listeners
-let _dmReplyMsg = null;   // message being replied to
-let _dmEmojiOpen = false;
-let _dmMsgCache = {};     // msgId -> msgObj for current conv
+let _dmMsgOff     = null;
+let _dmReplyMsg   = null;
+let _dmEmojiOpen  = false;
+let _dmMsgCache   = new Map(); // msgId → msgObj  (Map preserves insertion order)
 
 const _REACTIONS = ['❤️','😂','👍','😮','😢','😡'];
-const _EMOJIS = ['❤️','😂','😮','😢','😡','👍','👎','🔥','🎉','💯','😍','🙏','💪','✅','😭','🤣','😁','🥳','👏','💀','🫡','🤝','💰','📈','🚀','⭐','💎','👑','🤑','😎'];
+const _EMOJIS    = ['❤️','😂','😮','😢','😡','👍','👎','🔥','🎉','💯','😍','🙏','💪','✅','😭','🤣','😁','🥳','👏','💀','🫡','🤝','💰','📈','🚀','⭐','💎','👑','🤑','😎'];
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPEN / CLOSE DM
+═══════════════════════════════════════════════════════════════════════════ */
 async function openDMWith(uid) {
-  // Teardown previous chat
   _dmTeardown();
 
   if (activePage !== 'messages') showPage('messages');
   activeConvUid = uid;
 
-  // Show DM view, hide list
   const lv = $('messagesListView'), dp = $('dmFullpage');
   if (lv) lv.style.display = 'none';
   if (!dp) return;
   dp.style.display = 'flex';
 
-  // Load partner profile
+  // Load partner profile (one-shot, not a listener)
   try {
     const s = await window.XF.get('users/' + uid);
     _dmPartner = s.exists() ? s.val() : null;
   } catch (e) { _dmPartner = null; }
 
-  // Render header
   _dmRenderHeader(uid);
-
-  // Wire up composer
   _dmWireComposer(uid);
 
-  // Start listeners
   const convId = [currentUser.uid, uid].sort().join('_');
   _dmStartListeners(uid, convId);
 }
 
 function _dmTeardown() {
-  if (_dmMsgOff) { try { _dmMsgOff(); } catch(e){} _dmMsgOff = null; }
+  if (_dmMsgOff)    { try { _dmMsgOff(); }    catch(e){} _dmMsgOff    = null; }
   if (_dmTypingOff) { try { _dmTypingOff(); } catch(e){} _dmTypingOff = null; }
   if (_dmTypingTimer) { clearTimeout(_dmTypingTimer); _dmTypingTimer = null; }
   if (currentUser && activeConvUid) {
     const cid = [currentUser.uid, activeConvUid].sort().join('_');
     window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
   }
-  _dmMsgCache = {};
-  _dmPartner = null;
-  _dmReplyMsg = null;
+  _dmMsgCache.clear();
+  _dmPartner   = null;
+  _dmReplyMsg  = null;
   _dmEmojiOpen = false;
   cancelReply();
 }
 
+function closeDMFullpage() {
+  _dmTeardown();
+  activeConvUid = null;
+  const lv = $('messagesListView'), dp = $('dmFullpage');
+  if (dp) dp.style.display = 'none';
+  if (lv) lv.style.display = 'block';
+  // Conv list re-renders from cache — instant
+  _rebuildConvUI();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEADER + COMPOSER WIRING
+═══════════════════════════════════════════════════════════════════════════ */
 function _dmRenderHeader(uid) {
-  const hdr = $('dmFullpageHeader');
-  if (!hdr) return;
+  const hdr = $('dmFullpageHeader'); if (!hdr) return;
   hdr.innerHTML = `
     <div class="dm-back-btn" onclick="closeDMFullpage()">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -216,7 +100,7 @@ function _dmWireComposer(uid) {
   if (input) {
     input.value = '';
     input.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dmSendText(uid); } };
-    input.oninput = () => { dmTyping(uid); dmUpdateSendBtn(); };
+    input.oninput   = () => { dmTyping(uid); dmUpdateSendBtn(); };
   }
   const sendBtn = document.querySelector('#dmFullpage .dm-send-btn');
   if (sendBtn) sendBtn.onclick = () => dmSendText(uid);
@@ -227,7 +111,6 @@ function _dmWireComposer(uid) {
   const emojiBtn = $('dmEmojiBtn');
   if (emojiBtn) emojiBtn.onclick = e => { e.stopPropagation(); dmToggleEmoji(); };
 
-  // Close emoji on outside click
   document.addEventListener('click', function _ce(e) {
     if (!$('dmEmojiPicker')?.contains(e.target) && e.target.id !== 'dmEmojiBtn') {
       const picker = $('dmEmojiPicker');
@@ -239,68 +122,68 @@ function _dmWireComposer(uid) {
   dmUpdateSendBtn();
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LISTENERS — child events on the active DM conversation only
+   child_added   → new message (or initial load of last 100)
+   child_changed → read receipts, reactions, edits
+   child_removed → deleted message
+   All three update _dmMsgCache then debounce a re-render.
+═══════════════════════════════════════════════════════════════════════════ */
 function _dmStartListeners(uid, convId) {
   const dmPath  = 'dms/' + convId;
   const typPath = 'typing/' + convId + '/' + uid;
 
-  // ── Message listeners ────────────────────────────────────────────────────
-  // child_added fires for the last 100 existing messages on attach AND every
-  // new message after that. We must use XF.onChild (stable ref registry) so
-  // that the unsub functions actually remove the correct listeners.
-  // NOTE: child_added with limitToLast goes through XF.db directly because
-  // it needs a query (not a plain path), so we manage it manually here but
-  // store both the ref and handler so cleanup is correct.
-  const dmRef     = window.XF.db.ref(dmPath).limitToLast(100);
-  const dmRefFull = window.XF.db.ref(dmPath); // for changed/removed (no limit)
+  // Query ref for last 100 — separate object from the full ref
+  const dmQuery   = window.XF.db.ref(dmPath).limitToLast(100);
+  const dmRefFull = window.XF.db.ref(dmPath);
 
-  const onAdd = snap => {
-    _dmMsgCache[snap.key] = { id: snap.key, ...snap.val() };
+  const onAdded = snap => {
+    _dmMsgCache.set(snap.key, { id: snap.key, ...snap.val() });
     _dmRender(uid, convId);
   };
-  const onChange = snap => {
-    _dmMsgCache[snap.key] = { id: snap.key, ...snap.val() };
+  const onChanged = snap => {
+    _dmMsgCache.set(snap.key, { id: snap.key, ...snap.val() });
     _dmRender(uid, convId);
   };
-  const onRemove = snap => {
-    delete _dmMsgCache[snap.key];
+  const onRemoved = snap => {
+    _dmMsgCache.delete(snap.key);
     _dmRender(uid, convId);
   };
 
-  dmRef.on('child_added',   onAdd);
-  dmRefFull.on('child_changed', onChange);
-  dmRefFull.on('child_removed', onRemove);
+  dmQuery.on('child_added',        onAdded);
+  dmRefFull.on('child_changed',   onChanged);
+  dmRefFull.on('child_removed',   onRemoved);
 
-  // Cleanup: off() called on the SAME ref objects that on() used
   _dmMsgOff = () => {
-    dmRef.off('child_added',       onAdd);
-    dmRefFull.off('child_changed', onChange);
-    dmRefFull.off('child_removed', onRemove);
+    dmQuery.off('child_added',      onAdded);
+    dmRefFull.off('child_changed', onChanged);
+    dmRefFull.off('child_removed', onRemoved);
   };
 
-  // ── Typing indicator ─────────────────────────────────────────────────────
+  // Typing indicator via XF.on (stable ref)
   const onType = snap => {
     const st = $('dmStatus'); if (!st) return;
-    if (snap.val() === true) {
-      st.innerHTML = '<span style="color:#00c853;font-size:0.78rem">● typing…</span>';
-    } else {
-      st.textContent = '@' + escapeHTML(_dmPartner?.handle || '');
-    }
+    st.innerHTML = snap.val() === true
+      ? '<span style="color:#00c853;font-size:0.78rem">● typing…</span>'
+      : escapeHTML('@' + (_dmPartner?.handle || ''));
   };
-  // Use XF.on (stable ref + registry) for the typing path
   _dmTypingOff = window.XF.on(typPath, onType);
 }
 
-/* ─── RENDER MESSAGES ─── */
-let _dmRenderDebounce = null;
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER — reads cache, sorts, paints. Debounced to collapse burst events.
+═══════════════════════════════════════════════════════════════════════════ */
+let _dmRenderTimer = null;
 function _dmRender(uid, convId) {
-  clearTimeout(_dmRenderDebounce);
-  _dmRenderDebounce = setTimeout(() => _dmDoRender(uid, convId), 30);
+  clearTimeout(_dmRenderTimer);
+  _dmRenderTimer = setTimeout(() => _dmDoRender(uid, convId), 16);
 }
 
 function _dmDoRender(uid, convId) {
   const msgEl = $('dmMessages'); if (!msgEl) return;
 
-  const msgs = Object.values(_dmMsgCache).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  // Sort by timestamp — Map keeps insertion order but timestamps might not be
+  const msgs = [..._dmMsgCache.values()].sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
 
   if (!msgs.length) {
     msgEl.innerHTML = `<div class="dm-empty">Start the conversation! 👋</div>`;
@@ -308,27 +191,27 @@ function _dmDoRender(uid, convId) {
   }
 
   const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
-  const html = _buildMsgsHTML(msgs, uid, convId);
-  msgEl.innerHTML = html;
+  msgEl.innerHTML = _buildMsgsHTML(msgs, uid, convId);
   if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
 
-  // Mark incoming as read after short delay
   setTimeout(() => { if (activeConvUid === uid) _markRead(convId); }, 800);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   HTML BUILDER
+═══════════════════════════════════════════════════════════════════════════ */
 function _buildMsgsHTML(msgs, uid, convId) {
-  let html = '';
-  let lastDateStr = '';
+  let html = '', lastDate = '';
 
-  msgs.forEach(m => {
+  for (const m of msgs) {
     const isMe = m.senderUid === currentUser.uid;
 
     // Date separator
     if (m.createdAt > 0) {
       const ds = new Date(m.createdAt).toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' });
-      if (ds !== lastDateStr) {
+      if (ds !== lastDate) {
         html += `<div class="dm-date-sep"><span>${ds}</span></div>`;
-        lastDateStr = ds;
+        lastDate = ds;
       }
     }
 
@@ -344,12 +227,12 @@ function _buildMsgsHTML(msgs, uid, convId) {
     // Content
     let content = '';
     if (m.imageUrl) content += `<img src="${escapeHTML(m.imageUrl)}" class="dm-img-bubble" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" loading="lazy">`;
-    if (m.text) content += `<span class="dm-text">${escapeHTML(m.text)}</span>`;
+    if (m.text)     content += `<span class="dm-text">${escapeHTML(m.text)}</span>`;
 
-    // Footer: time + ticks
-    const t = m.createdAt > 0 ? new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+    // Meta
+    const t      = m.createdAt > 0 ? new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
     const isRead = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
-    const ticks = isMe ? `<span class="dm-ticks${isRead?' read':''}" title="${isRead?'Read':'Sent'}">✓✓</span>` : '';
+    const ticks  = isMe ? `<span class="dm-ticks${isRead?' read':''}" title="${isRead?'Read':'Sent'}">✓✓</span>` : '';
     const starred = m.starred?.[currentUser.uid] ? '<span class="dm-starred">⭐</span>' : '';
 
     // Reactions
@@ -378,14 +261,16 @@ function _buildMsgsHTML(msgs, uid, convId) {
         ${reactHTML}
       </div>
     </div>`;
-  });
+  }
   return html;
 }
 
-/* ─── CONTEXT MENU ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT MENU
+═══════════════════════════════════════════════════════════════════════════ */
 let _dmHoldTimer = null;
 function dmHoldStart(e, el) { _dmHoldTimer = setTimeout(() => dmCtxMenu(e, el), 500); }
-function dmHoldEnd() { clearTimeout(_dmHoldTimer); }
+function dmHoldEnd()        { clearTimeout(_dmHoldTimer); }
 
 function dmCtxMenu(e, el) {
   e.preventDefault(); e.stopPropagation();
@@ -405,14 +290,16 @@ function dmCtxMenu(e, el) {
     ${isMe ? `<div class="dm-ctx-item danger" onclick="dmDelete('${cid}','${mid}')">🗑 Delete</div>` : ''}`;
 
   const rect = el.getBoundingClientRect();
-  const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
-  const fromRight = el.getBoundingClientRect().left > window.innerWidth / 2;
-  menu.style.cssText = `position:fixed;top:${top}px;${fromRight?'right:'+(window.innerWidth-rect.right)+'px':'left:'+Math.max(8,rect.left)+'px'};z-index:9999`;
+  const top  = Math.min(rect.bottom + 4, window.innerHeight - 200);
+  const fromRight = rect.left > window.innerWidth / 2;
+  menu.style.cssText = `position:fixed;top:${top}px;${fromRight ? 'right:'+(window.innerWidth-rect.right)+'px' : 'left:'+Math.max(8,rect.left)+'px'};z-index:9999`;
   document.body.appendChild(menu);
-  setTimeout(() => document.addEventListener('click', function h(){menu.remove();document.removeEventListener('click',h);},{once:true}), 50);
+  setTimeout(() => document.addEventListener('click', function h(){ menu.remove(); document.removeEventListener('click',h); }, { once:true }), 50);
 }
 
-/* ─── MESSAGE ACTIONS ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MESSAGE ACTIONS
+═══════════════════════════════════════════════════════════════════════════ */
 async function dmReact(cid, mid, emoji) {
   document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
   if (!currentUser) return;
@@ -426,11 +313,9 @@ async function dmReact(cid, mid, emoji) {
 
 async function dmReply(cid, mid) {
   document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
-  const m = _dmMsgCache[mid]; if (!m) return;
+  const m = _dmMsgCache.get(mid); if (!m) return;
   _dmReplyMsg = {
-    id: mid,
-    text: m.text || '',
-    imageUrl: m.imageUrl || '',
+    id: mid, text: m.text || '', imageUrl: m.imageUrl || '',
     senderName: m.senderUid === currentUser.uid ? 'You' : (_dmPartner?.displayName || 'Member')
   };
   const bar = $('dmReplyBar');
@@ -453,14 +338,14 @@ async function dmStar(cid, mid) {
   try {
     const s = await window.XF.get(path);
     if (s.exists()) { await window.XF.remove(path); showToast('Star removed'); }
-    else { await window.XF.set(path, true); showToast('⭐ Starred'); }
+    else            { await window.XF.set(path, true); showToast('⭐ Starred'); }
   } catch(e) {}
 }
 
 function dmCopy(mid) {
   document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
-  const m = _dmMsgCache[mid];
-  if (m?.text) navigator.clipboard?.writeText(m.text).then(() => showToast('Copied!')).catch(() => {});
+  const m = _dmMsgCache.get(mid);
+  if (m?.text) navigator.clipboard?.writeText(m.text).then(() => showToast('Copied!')).catch(()=>{});
 }
 
 async function dmDelete(cid, mid) {
@@ -478,7 +363,9 @@ function dmScrollTo(mid) {
   }
 }
 
-/* ─── EMOJI PICKER ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   EMOJI PICKER
+═══════════════════════════════════════════════════════════════════════════ */
 function dmToggleEmoji() {
   const p = $('dmEmojiPicker'); if (!p) return;
   _dmEmojiOpen = !_dmEmojiOpen;
@@ -489,18 +376,17 @@ function insertEmoji(emoji) {
   const pos = input.selectionStart ?? input.value.length;
   input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
   input.selectionStart = input.selectionEnd = pos + emoji.length;
-  input.focus();
-  dmUpdateSendBtn();
+  input.focus(); dmUpdateSendBtn();
   const p = $('dmEmojiPicker'); if (p) { p.style.display='none'; _dmEmojiOpen=false; }
 }
-
 function dmUpdateSendBtn() {
   const btn = document.querySelector('#dmFullpage .dm-send-btn'); if (!btn) return;
-  const hasText = ($('dmInput')?.value?.trim()?.length || 0) > 0;
-  btn.style.opacity = hasText ? '1' : '0.5';
+  btn.style.opacity = ($('dmInput')?.value?.trim()?.length || 0) > 0 ? '1' : '0.5';
 }
 
-/* ─── TYPING INDICATOR ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPING INDICATOR
+═══════════════════════════════════════════════════════════════════════════ */
 function dmTyping(uid) {
   if (!currentUser || !uid) return;
   const cid = [currentUser.uid, uid].sort().join('_');
@@ -511,17 +397,16 @@ function dmTyping(uid) {
   }, 2500);
 }
 
-/* ─── MARK MESSAGES READ ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MARK READ
+═══════════════════════════════════════════════════════════════════════════ */
 async function _markRead(convId) {
   if (!currentUser) return;
   try {
-    const snap = await window.XF.get('dms/' + convId);
-    if (!snap.exists()) return;
     const updates = {};
-    snap.forEach(c => {
-      const m = c.val();
+    _dmMsgCache.forEach((m, key) => {
       if (m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid]))
-        updates['dms/' + convId + '/' + c.key + '/readBy/' + currentUser.uid] = true;
+        updates['dms/' + convId + '/' + key + '/readBy/' + currentUser.uid] = true;
     });
     if (Object.keys(updates).length) {
       await window.XF.multiUpdate(updates);
@@ -530,19 +415,20 @@ async function _markRead(convId) {
   } catch(e) {}
 }
 
-/* ─── SEND TEXT ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SEND TEXT
+═══════════════════════════════════════════════════════════════════════════ */
 async function dmSendText(uid) {
   uid = uid || activeConvUid;
   if (!uid || !currentUser) return;
   const input = $('dmInput');
-  const text = input?.value?.trim();
+  const text  = input?.value?.trim();
   if (!text) return;
 
   input.value = '';
   dmUpdateSendBtn();
 
   const cid = [currentUser.uid, uid].sort().join('_');
-  // Clear typing
   window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
   clearTimeout(_dmTypingTimer);
 
@@ -557,7 +443,6 @@ async function dmSendText(uid) {
   try {
     await window.XF.push('dms/' + cid, msg);
     _dmNotifyRecipient(uid, text);
-    refreshMsgBadge();
   } catch(err) {
     input.value = text;
     dmUpdateSendBtn();
@@ -565,13 +450,15 @@ async function dmSendText(uid) {
   }
 }
 
-/* ─── SEND IMAGE ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SEND IMAGE
+═══════════════════════════════════════════════════════════════════════════ */
 async function dmSendImage(inputEl, uid) {
   uid = uid || activeConvUid;
   if (!uid || !currentUser || !inputEl?.files?.[0]) return;
   showToast('Uploading…');
   try {
-    const r = await window.XCloud.upload(inputEl.files[0], 'dm_images');
+    const r   = await window.XCloud.upload(inputEl.files[0], 'dm_images');
     const cid = [currentUser.uid, uid].sort().join('_');
     const msg = {
       senderUid: currentUser.uid,
@@ -584,11 +471,12 @@ async function dmSendImage(inputEl, uid) {
     await window.XF.push('dms/' + cid, msg);
     inputEl.value = '';
     _dmNotifyRecipient(uid, '📷 Photo');
-    refreshMsgBadge();
   } catch(e) { showToast('Image upload failed'); }
 }
 
-/* ─── NOTIFY RECIPIENT ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   NOTIFY RECIPIENT
+═══════════════════════════════════════════════════════════════════════════ */
 async function _dmNotifyRecipient(toUid, preview) {
   try {
     await window.XF.push('notifications/' + toUid, {
@@ -600,14 +488,4 @@ async function _dmNotifyRecipient(toUid, preview) {
       read: false
     });
   } catch(e) {}
-}
-
-/* ─── CLOSE DM ─── */
-function closeDMFullpage() {
-  _dmTeardown();
-  activeConvUid = null;
-  const lv = $('messagesListView'), dp = $('dmFullpage');
-  if (dp) dp.style.display = 'none';
-  if (lv) lv.style.display = 'block';
-  renderConversations();
 }
