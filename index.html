@@ -421,7 +421,15 @@
         <div class="page-header" style="position:static;display:flex;align-items:center;justify-content:space-between;padding-right:16px">
           <h1>Messages</h1>
         </div>
+        <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:2px">
+          <button id="msgTabChats" class="msg-tab active" onclick="_switchMsgTab('chats')">Chats</button>
+          <button id="msgTabRequests" class="msg-tab" onclick="_switchMsgTab('requests')" style="position:relative">
+            Requests
+            <span id="msgReqBadge" style="display:none;position:absolute;top:6px;right:8px;background:var(--accent);color:#fff;font-size:0.65rem;font-weight:700;border-radius:9999px;padding:1px 5px;min-width:16px;text-align:center"></span>
+          </button>
+        </div>
         <div id="convList"></div>
+        <div id="msgRequestList" style="display:none"></div>
       </div>
       <!-- DM Fullpage — Messenger style -->
       <div class="dm-fullpage" id="dmFullpage" style="display:none">
@@ -485,6 +493,7 @@
           <div class="admin-tab active" onclick="switchAdminTab('users', this)">⊛ Users</div>
           <div class="admin-tab" onclick="switchAdminTab('posts', this)">❤ Posts</div>
           <div class="admin-tab" onclick="switchAdminTab('stats', this)">▤ Stats</div>
+          <div class="admin-tab" onclick="switchAdminTab('settings', this)">⚙ Settings</div>
         </div>
         <div class="admin-content">
           <div id="adminTabUsers">
@@ -495,6 +504,10 @@
           <div id="adminTabPosts" style="display:none">
             <div class="admin-section-title" style="margin-bottom:12px">❤ Edit Post Likes</div>
             <div id="adminPostList"><div class="loading-center"><div class="spinner"></div></div></div>
+          </div>
+          <div id="adminTabSettings" style="display:none">
+            <div class="admin-section-title" style="margin-bottom:16px">⚙ Platform Settings</div>
+            <div id="adminSettingsContent"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
           <div id="adminTabStats" style="display:none">
             <div class="admin-stat-bar" id="adminStatBar">

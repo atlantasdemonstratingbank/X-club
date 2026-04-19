@@ -192,6 +192,27 @@ function _rebuildNotifUI() {
       continue;
     }
 
+    if (n.type === 'message_request') {
+      const prev = n.preview ? `: <em>${escapeHTML(n.preview)}</em>` : '';
+      html += `<div class="${cls}" onclick="_switchMsgTab('requests');showPage('messages')">
+        <div class="notif-icon">✉</div>
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escapeHTML(n.fromName||'Someone')}</strong> sent you a message request${prev}</div>
+          <div class="notif-time">${time}</div>
+        </div>${dot}</div>`;
+      continue;
+    }
+
+    if (n.type === 'message_request_accepted') {
+      html += `<div class="${cls}" onclick="openDMWith('${n.fromUid}')">
+        <div class="notif-icon">✅</div>
+        <div class="notif-body">
+          <div class="notif-text"><strong>${escapeHTML(n.fromName||'Someone')}</strong> accepted your message request</div>
+          <div class="notif-time">${time}</div>
+        </div>${dot}</div>`;
+      continue;
+    }
+
     // Generic
     html += `<div class="${cls}">
       <div class="notif-icon">🔔</div>

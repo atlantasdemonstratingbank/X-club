@@ -1,4 +1,4 @@
-// profile.js — X Club v7 — Own Profile, User Profile, Viewers, Share
+// profile.js — X Club v7
 'use strict';
 
 /* ══════════════════════════════════════════════
@@ -152,6 +152,7 @@ async function renderUserProfile(uid) {
     }
     let connStatus = 'none';
     let incomingReqId = null;
+    let hasSentMsgReq = false;
     if (currentUser) {
       const cs = await window.XF.get('connections/' + currentUser.uid + '/' + uid);
       if (cs.exists()) {
@@ -161,6 +162,9 @@ async function renderUserProfile(uid) {
         const rs2 = await window.XF.get('connectionRequests/' + uid + '_' + currentUser.uid);
         if (rs1.exists() && rs1.val().status === 'pending') { connStatus = 'pending'; }
         else if (rs2.exists() && rs2.val().status === 'pending') { connStatus = 'incoming'; incomingReqId = uid + '_' + currentUser.uid; }
+        // Check if we already sent a message request
+        const mrSnap = await window.XF.get('messageRequests/' + uid + '/' + currentUser.uid);
+        if (mrSnap.exists()) hasSentMsgReq = true;
       }
     }
     const postsSnap = await window.XF.get('posts'); const posts = [];
@@ -179,7 +183,13 @@ async function renderUserProfile(uid) {
               ? `<button class="btn btn-primary btn-sm" onclick="acceptConnectionFromProfile('${incomingReqId}','${uid}',this)">✓ Accept</button><button class="btn btn-outline btn-sm" onclick="declineConnection('${incomingReqId}').then(()=>renderUserProfile('${uid}'))">Decline</button>`
               : connectBtnHTML(uid, connStatus) : ''}
             ${!currentUser ? `<button class="btn btn-primary btn-sm" onclick="showPage('register')">Connect</button>` : ''}
-            ${connStatus === 'connected' ? `<button class="btn btn-outline btn-sm" onclick="openDMWith('${uid}')">Message</button>` : ''}
+            ${connStatus === 'connected'
+              ? `<button class="btn btn-outline btn-sm" onclick="openDMWith('${uid}')">Message</button>`
+              : currentUser && uid !== currentUser.uid
+                ? hasSentMsgReq
+                  ? `<button class="btn btn-outline btn-sm" disabled style="opacity:0.5">Request sent</button>`
+                  : `<button class="btn btn-outline btn-sm" onclick="sendMessageRequest('${uid}','${escapeHTML(profile.displayName||'Member')}')">✉ Message</button>`
+                : ''}
             <button class="btn btn-outline btn-sm" onclick="shareUserProfile('${uid}','${escapeHTML(profile.displayName || 'Member')}','${escapeHTML(profile.handle || uid)}')" title="Share profile">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
@@ -214,6 +224,175 @@ function switchUserProfileTab(tab, el) {
   el.classList.add('active');
   const container = $('userProfilePosts'); if (!container) return;
   container.querySelectorAll('.post').forEach(p => { p.style.display = (tab === 'media' && !p.querySelector('.post-image')) ? 'none' : ''; });
+}
+
+/* ══════════════════════════════════════════════
+   MESSAGE REQUESTS
+   - sendMessageRequest: prompts for a message, writes to messageRequests/{toUid}/{fromUid}
+   - renderMsgRequests: shows incoming requests with Accept / Decline
+   - acceptMsgRequest: moves to real DMs, deletes the request
+   - declineMsgRequest: deletes the request
+══════════════════════════════════════════════ */
+function sendMessageRequest(toUid, toName) {
+  if (!currentUser) { showPage('register'); return; }
+  // Show a small inline modal prompting for a message
+  const existing = document.getElementById('msgReqModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'msgReqModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:400px">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:6px">Message ${escapeHTML(toName)}</div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:14px">This will be sent as a message request. They can accept or decline.</div>
+      <textarea id="msgReqText" placeholder="Write a message…" rows="3"
+        style="width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text);font-size:0.9rem;resize:none;outline:none;font-family:inherit"></textarea>
+      <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('msgReqModal').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="_submitMsgRequest('${toUid}','${escapeHTML(toName)}')">Send Request</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('msgReqText')?.focus(), 50);
+}
+
+async function _submitMsgRequest(toUid, toName) {
+  const textEl = document.getElementById('msgReqText');
+  const text = textEl?.value?.trim();
+  if (!text) { showToast('Write a message first'); return; }
+  const modal = document.getElementById('msgReqModal');
+  try {
+    await window.XF.set('messageRequests/' + toUid + '/' + currentUser.uid, {
+      fromUid: currentUser.uid,
+      fromName: currentProfile?.displayName || 'Member',
+      fromHandle: currentProfile?.handle || '',
+      fromPhoto: currentProfile?.photoURL || '',
+      text,
+      createdAt: Date.now(),
+      read: false
+    });
+    // Notify recipient
+    await window.XF.push('notifications/' + toUid, {
+      type: 'message_request',
+      fromUid: currentUser.uid,
+      fromName: currentProfile?.displayName || 'Member',
+      preview: text.slice(0, 40),
+      createdAt: Date.now(),
+      read: false
+    });
+    if (modal) modal.remove();
+    showToast('Message request sent!');
+    // Re-render profile to update button state
+    renderUserProfile(toUid);
+  } catch (e) {
+    showToast('Failed to send request');
+  }
+}
+
+async function renderMsgRequests() {
+  const container = $('msgRequestList'); if (!container || !currentUser) return;
+  container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  try {
+    const snap = await window.XF.get('messageRequests/' + currentUser.uid);
+    if (!snap.exists()) {
+      container.innerHTML = '<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">✉</div><div class="empty-state-title">No message requests</div></div>';
+      return;
+    }
+    const requests = [];
+    snap.forEach(c => requests.push({ fromUid: c.key, ...c.val() }));
+    requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    container.innerHTML = requests.map(r => `
+      <div class="conv-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div style="cursor:pointer" onclick="openUserProfile('${r.fromUid}',event)">
+            ${avatarHTML({ photoURL: r.fromPhoto, displayName: r.fromName, handle: r.fromHandle }, 'md')}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:0.93rem">${escapeHTML(r.fromName || 'Member')}</div>
+            <div style="font-size:0.8rem;color:var(--text-dim)">@${escapeHTML(r.fromHandle || '')}</div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${timeAgo(r.createdAt)}</div>
+        </div>
+        <div style="font-size:0.88rem;color:var(--text);padding-left:2px;word-break:break-word">${escapeHTML(r.text || '')}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="acceptMsgRequest('${r.fromUid}','${escapeHTML(r.fromName||'Member')}')">✓ Accept</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="declineMsgRequest('${r.fromUid}')">Decline</button>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load requests</div></div>';
+  }
+}
+
+async function acceptMsgRequest(fromUid, fromName) {
+  try {
+    // Get request data to seed first message
+    const reqSnap = await window.XF.get('messageRequests/' + currentUser.uid + '/' + fromUid);
+    if (reqSnap.exists()) {
+      const req = reqSnap.val();
+      const convId = [currentUser.uid, fromUid].sort().join('_');
+      // Write their original message into real DMs
+      await window.XF.push('dms/' + convId, {
+        senderUid: fromUid,
+        text: req.text,
+        createdAt: req.createdAt || Date.now(),
+        readBy: {}
+      });
+    }
+    // Delete the request
+    await window.XF.remove('messageRequests/' + currentUser.uid + '/' + fromUid);
+    // Notify sender
+    await window.XF.push('notifications/' + fromUid, {
+      type: 'message_request_accepted',
+      fromUid: currentUser.uid,
+      fromName: currentProfile?.displayName || 'Member',
+      createdAt: Date.now(),
+      read: false
+    });
+    showToast('Request accepted — opening chat');
+    // Switch to messages tab, open DM
+    _switchMsgTab('chats');
+    openDMWith(fromUid);
+  } catch (e) { showToast('Could not accept request'); }
+}
+
+async function declineMsgRequest(fromUid) {
+  try {
+    await window.XF.remove('messageRequests/' + currentUser.uid + '/' + fromUid);
+    showToast('Request declined');
+    renderMsgRequests();
+    _updateMsgRequestBadge();
+  } catch (e) { showToast('Could not decline request'); }
+}
+
+async function _updateMsgRequestBadge() {
+  try {
+    const snap = await window.XF.get('messageRequests/' + currentUser.uid);
+    const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+    const badge = $('msgReqBadge');
+    if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = count > 0 ? 'flex' : 'none'; }
+  } catch (e) {}
+}
+
+function _switchMsgTab(tab) {
+  const chatsBtn  = $('msgTabChats');
+  const reqBtn    = $('msgTabRequests');
+  const convList  = $('convList');
+  const reqList   = $('msgRequestList');
+  if (!chatsBtn || !reqBtn) return;
+  if (tab === 'chats') {
+    chatsBtn.classList.add('active'); reqBtn.classList.remove('active');
+    if (convList)  convList.style.display  = 'block';
+    if (reqList)   reqList.style.display   = 'none';
+  } else {
+    reqBtn.classList.add('active'); chatsBtn.classList.remove('active');
+    if (convList)  convList.style.display  = 'none';
+    if (reqList)   reqList.style.display   = 'block';
+    renderMsgRequests();
+    _updateMsgRequestBadge();
+  }
 }
 
 /* ══════════════════════════════════════════════

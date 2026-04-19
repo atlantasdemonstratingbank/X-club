@@ -1,4 +1,4 @@
-// admin.js — X Club v7 — Admin Panel, User Management, Stats, Scheduled Posts
+// admin.js — X Club v7
 'use strict';
 
 /* ══════════════════════════════════════════════
@@ -6,11 +6,13 @@
 ══════════════════════════════════════════════ */
 function switchAdminTab(tab, el) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); el.classList.add('active');
-  $('adminTabUsers').style.display = tab === 'users' ? 'block' : 'none';
-  $('adminTabPosts').style.display = tab === 'posts' ? 'block' : 'none';
-  $('adminTabStats').style.display = tab === 'stats' ? 'block' : 'none';
-  if (tab === 'stats') { loadAdminStats(); loadScheduledPostsAdmin(); }
-  if (tab === 'posts') { adminLoadPosts(); }
+  $('adminTabUsers').style.display    = tab === 'users'    ? 'block' : 'none';
+  $('adminTabPosts').style.display    = tab === 'posts'    ? 'block' : 'none';
+  $('adminTabStats').style.display    = tab === 'stats'    ? 'block' : 'none';
+  $('adminTabSettings').style.display = tab === 'settings' ? 'block' : 'none';
+  if (tab === 'stats')    { loadAdminStats(); loadScheduledPostsAdmin(); }
+  if (tab === 'posts')    { adminLoadPosts(); }
+  if (tab === 'settings') { loadAdminSettings(); }
 }
 
 /* ══════════════════════════════════════════════
@@ -93,6 +95,109 @@ async function adminDeleteUser(uid) {
 }
 
 /* ══════════════════════════════════════════════
+   SETTINGS TAB — Verification Price + Currency
+   Reads/writes to appConfig/membershipPrice and
+   appConfig/membershipCurrency in Firebase.
+   auth.js reads these dynamically on payment.
+══════════════════════════════════════════════ */
+async function loadAdminSettings() {
+  const container = $('adminSettingsContent'); if (!container) return;
+  container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  try {
+    const snap = await window.XF.get('appConfig');
+    const cfg  = snap.exists() ? snap.val() : {};
+    const price    = cfg.membershipPrice    ?? 1999;
+    const currency = cfg.membershipCurrency ?? 'EUR';
+    const label    = cfg.membershipLabel    ?? '€1,999';
+
+    container.innerHTML = `
+      <div style="padding:4px 0 20px">
+
+        <div class="admin-setting-row">
+          <div class="admin-setting-label">
+            Verification Price
+            <div class="admin-setting-sub">Amount charged at checkout (Flutterwave)</div>
+          </div>
+          <input id="cfgPrice" type="number" min="1" value="${price}"
+            style="width:110px;padding:8px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;outline:none">
+        </div>
+
+        <div class="admin-setting-row">
+          <div class="admin-setting-label">
+            Currency Code
+            <div class="admin-setting-sub">ISO code — EUR, USD, GBP, NGN…</div>
+          </div>
+          <input id="cfgCurrency" type="text" maxlength="3" value="${escapeHTML(currency)}"
+            style="width:80px;padding:8px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;outline:none;text-transform:uppercase">
+        </div>
+
+        <div class="admin-setting-row">
+          <div class="admin-setting-label">
+            Display Label
+            <div class="admin-setting-sub">Shown on the paywall card — e.g. €1,999</div>
+          </div>
+          <input id="cfgLabel" type="text" maxlength="20" value="${escapeHTML(label)}"
+            style="width:120px;padding:8px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.9rem;outline:none">
+        </div>
+
+        <div style="margin-top:20px;display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="saveAdminSettings()">Save Settings</button>
+          <span id="settingsSaveStatus" style="font-size:0.82rem;color:var(--success);align-self:center"></span>
+        </div>
+
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="font-weight:700;font-size:0.93rem;margin-bottom:10px">⚙ Platform Keys</div>
+          <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">AI — Groq Key</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+            <input id="groqKeyInput" class="form-input" type="password" placeholder="Paste gsk_... key" style="flex:1;font-size:0.82rem" onfocus="if(this.value.startsWith('•'))this.value=''">
+            <button class="btn btn-accent btn-sm" onclick="saveGroqKey()">Save</button>
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px">Free key from console.groq.com</div>
+          <div style="font-size:0.78rem;color:var(--success);padding:8px;background:rgba(0,186,124,0.08);border-radius:6px">✓ Flutterwave key is hardcoded and active</div>
+        </div>
+
+        <div style="margin-top:20px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-weight:700;font-size:0.93rem">◈ Claude Engineer</div>
+            <div style="font-size:0.78rem;color:var(--text-dim)">Post AI business insight to feed</div>
+          </div>
+          <button id="cePostBtn" class="btn btn-accent btn-sm" onclick="triggerClaudeEngineerPost()">Post Now</button>
+        </div>
+      </div>`;
+
+    // Load groq key masked status
+    window.XF.get('config/groqKey').then(s => {
+      if (s.exists() && s.val()) { const e = $('groqKeyInput'); if (e) e.value = '••••••••••••••••'; }
+    }).catch(() => {});
+
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load settings</div></div>';
+  }
+}
+
+async function saveAdminSettings() {
+  const price    = parseInt($('cfgPrice')?.value);
+  const currency = ($('cfgCurrency')?.value || '').trim().toUpperCase();
+  const label    = ($('cfgLabel')?.value || '').trim();
+  const status   = $('settingsSaveStatus');
+
+  if (isNaN(price) || price < 1)  { showToast('Enter a valid price'); return; }
+  if (!currency || currency.length < 2) { showToast('Enter a valid currency code'); return; }
+  if (!label) { showToast('Enter a display label'); return; }
+
+  try {
+    await window.XF.update('appConfig', { membershipPrice: price, membershipCurrency: currency, membershipLabel: label });
+    if (status) { status.textContent = '✓ Saved'; setTimeout(() => { if (status) status.textContent = ''; }, 3000); }
+    showToast('Settings saved!');
+    // Update the paywall display label live
+    const paywallPrice = document.querySelector('.paywall-price');
+    if (paywallPrice) paywallPrice.textContent = label;
+  } catch (e) {
+    showToast('Failed to save settings');
+  }
+}
+
+/* ══════════════════════════════════════════════
    STATS
 ══════════════════════════════════════════════ */
 async function loadAdminStats() {
@@ -129,25 +234,15 @@ async function loadScheduledPostsAdmin() {
 async function cancelScheduled(key) { await window.XF.set('scheduledPosts/' + key + '/status', 'cancelled'); showToast('Scheduled post cancelled'); loadScheduledPostsAdmin(); }
 
 /* ══════════════════════════════════════════════
-   ADMIN TOOLS INJECTION (Keys + Claude Engineer)
+   ADMIN TOOLS INJECTION (legacy — now in Settings tab)
 ══════════════════════════════════════════════ */
 function injectAdminTools() {
-  const adminContent = $('adminTabUsers'); if (!adminContent || $('cePostBtn')) return;
-  const keyPanel = document.createElement('div');
-  keyPanel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm)';
-  keyPanel.innerHTML = `<div style="font-weight:700;font-size:0.93rem;margin-bottom:10px">⚙ Platform Keys</div>
-    <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;font-weight:600">AI — Groq Key</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input id="groqKeyInput" class="form-input" type="password" placeholder="Paste gsk_... key" style="flex:1;font-size:0.82rem" onfocus="if(this.value.startsWith('•'))this.value=''"><button class="btn btn-accent btn-sm" onclick="saveGroqKey()">Save</button></div>
-    <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px">Free key from console.groq.com</div>
-    <div style="font-size:0.78rem;color:var(--success);padding:8px;background:rgba(0,186,124,0.08);border-radius:6px;margin-bottom:4px">✓ Flutterwave key is hardcoded and active</div>`;
-  adminContent.insertBefore(keyPanel, adminContent.firstChild);
-  const btn = document.createElement('div');
-  btn.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:12px';
-  btn.innerHTML = `<div><div style="font-weight:700;font-size:0.93rem">◈ Claude Engineer</div><div style="font-size:0.78rem;color:var(--text-dim)">Post AI business insight to feed</div></div><button id="cePostBtn" class="btn btn-accent btn-sm" onclick="triggerClaudeEngineerPost()">Post Now</button>`;
-  adminContent.insertBefore(btn, keyPanel.nextSibling);
-  const countBadge = document.createElement('div'); countBadge.id = 'adminUserCount'; countBadge.style.cssText = 'font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;padding:0 2px';
-  adminContent.insertBefore(countBadge, btn.nextSibling);
-  window.XF.get('config/groqKey').then(s => { if (s.exists() && s.val()) { const e = $('groqKeyInput'); if (e) e.value = '••••••••••••••••'; } }).catch(() => {});
+  // countBadge still injected into users tab
+  const adminContent = $('adminTabUsers'); if (!adminContent || $('adminUserCount')) return;
+  const countBadge = document.createElement('div'); countBadge.id = 'adminUserCount';
+  countBadge.style.cssText = 'font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;padding:0 2px';
+  const titleEl = adminContent.querySelector('.admin-section-title');
+  if (titleEl) titleEl.after(countBadge); else adminContent.prepend(countBadge);
 }
 
 async function triggerClaudeEngineerPost() {

@@ -78,7 +78,7 @@ async function onAuthChange(user) {
     const snap = await window.XF.get('users/' + user.uid);
     currentProfile = snap.exists() ? snap.val() : null;
     updateNavUser(); updateComposerAvatar(); loadSuggested(); startNotifWatch(); startMsgWatch();
-    updateSidebarVerifyBtn();
+    updateSidebarVerifyBtn(); _updateMsgRequestBadge();
     const handled = checkProfileDeepLink();
     if (!handled) {
       if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
@@ -113,15 +113,34 @@ function updateComposerAvatar() {
 /* ══════════════════════════════════════════════
    PAYWALL
 ══════════════════════════════════════════════ */
-function showPaywall() { $('paywallModal').classList.add('open'); }
+function showPaywall() {
+  $('paywallModal').classList.add('open');
+  // Update displayed price from Firebase if admin has changed it
+  window.XF.get('appConfig').then(cfg => {
+    if (cfg.exists() && cfg.val().membershipLabel) {
+      const el = document.querySelector('.paywall-price');
+      if (el) el.textContent = cfg.val().membershipLabel;
+    }
+  }).catch(() => {});
+}
 function closePaywall() { $('paywallModal').classList.remove('open'); }
 
-function initiatePayment() {
+async function initiatePayment() {
   if (!currentUser || !currentProfile) { showToast('Please sign in first'); return; }
   if (typeof FlutterwaveCheckout === 'undefined') { showToast('Payment system loading — try again'); return; }
+  // Read price dynamically from Firebase so admin can update without touching code
+  let amount = MEMBERSHIP_PRICE, currency = MEMBERSHIP_CURRENCY;
+  try {
+    const cfg = await window.XF.get('appConfig');
+    if (cfg.exists()) {
+      const v = cfg.val();
+      if (v.membershipPrice)    amount   = v.membershipPrice;
+      if (v.membershipCurrency) currency = v.membershipCurrency;
+    }
+  } catch (e) { /* fall back to config.js defaults */ }
   FlutterwaveCheckout({
     public_key: FLW_PUBLIC_KEY, tx_ref: 'XCLUB-' + currentUser.uid + '-' + Date.now(),
-    amount: MEMBERSHIP_PRICE, currency: MEMBERSHIP_CURRENCY, payment_options: 'card,banktransfer,ussd',
+    amount, currency, payment_options: 'card,banktransfer,ussd',
     customer: { email: currentUser.email, name: currentProfile.displayName || 'Member' },
     customizations: { title: 'X Club Membership', description: 'Annual verified membership', logo: '' },
     callback: async function (data) {
@@ -166,8 +185,9 @@ function checkProfileDeepLink() {
     try {
       let targetUid = uid;
       if (!targetUid && handle) {
-        const snap = await window.XF.get('users');
-        if (snap.exists()) snap.forEach(c => { if ((c.val().handle || '').toLowerCase() === handle.toLowerCase()) targetUid = c.key; });
+        // Use the handles/ index directly — no full user scan needed
+        const snap = await window.XF.get('handles/' + handle.toLowerCase());
+        targetUid = snap.exists() ? snap.val() : null;
       }
       if (!targetUid) { showToast('Profile not found'); return; }
       if (currentUser && targetUid === currentUser.uid) { showPage('profile'); return; }
