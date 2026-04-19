@@ -423,70 +423,41 @@
         </div>
         <div id="convList"></div>
       </div>
-      <!-- Full-page DM view — WhatsApp style -->
+      <!-- DM Fullpage — Messenger style -->
       <div class="dm-fullpage" id="dmFullpage" style="display:none">
-        <!-- Header -->
-        <div class="dm-fullpage-header" id="dmFullpageHeader"></div>
-        <!-- Messages -->
+        <div class="dm-header" id="dmFullpageHeader"></div>
         <div class="dm-messages" id="dmMessages"></div>
-        <!-- Reply bar (shown when replying) -->
-        <div class="dm-reply-bar" id="dmReplyBar">
-          <div style="flex:1">
-            <div class="dm-reply-preview"></div>
-          </div>
+        <div class="dm-reply-bar" id="dmReplyBar" style="display:none">
+          <div class="dm-reply-preview"></div>
           <button class="dm-reply-cancel" onclick="cancelReply()">✕</button>
         </div>
-        <!-- Composer -->
         <div class="dm-composer-wrap">
-          <!-- Emoji picker -->
-          <div class="dm-emoji-picker" id="dmEmojiPicker">
-            <span class="dm-emoji-item" onclick="insertEmoji('❤️')">❤️</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😂')">😂</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😮')">😮</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😢')">😢</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😡')">😡</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('👍')">👍</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('👎')">👎</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🔥')">🔥</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🎉')">🎉</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('💯')">💯</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😍')">😍</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🙏')">🙏</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('💪')">💪</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('✅')">✅</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😭')">😭</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🤣')">🤣</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😁')">😁</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🥳')">🥳</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('👏')">👏</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('💀')">💀</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🫡')">🫡</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🤝')">🤝</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('💰')">💰</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('📈')">📈</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🚀')">🚀</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('⭐')">⭐</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('💎')">💎</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('👑')">👑</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('🤑')">🤑</span>
-            <span class="dm-emoji-item" onclick="insertEmoji('😎')">😎</span>
+          <div class="dm-emoji-picker" id="dmEmojiPicker" style="display:none">
+            <span onclick="insertEmoji('❤️')">❤️</span><span onclick="insertEmoji('😂')">😂</span>
+            <span onclick="insertEmoji('😮')">😮</span><span onclick="insertEmoji('😢')">😢</span>
+            <span onclick="insertEmoji('😡')">😡</span><span onclick="insertEmoji('👍')">👍</span>
+            <span onclick="insertEmoji('👎')">👎</span><span onclick="insertEmoji('🔥')">🔥</span>
+            <span onclick="insertEmoji('🎉')">🎉</span><span onclick="insertEmoji('💯')">💯</span>
+            <span onclick="insertEmoji('😍')">😍</span><span onclick="insertEmoji('🙏')">🙏</span>
+            <span onclick="insertEmoji('💪')">💪</span><span onclick="insertEmoji('✅')">✅</span>
+            <span onclick="insertEmoji('😭')">😭</span><span onclick="insertEmoji('🤣')">🤣</span>
+            <span onclick="insertEmoji('😁')">😁</span><span onclick="insertEmoji('🥳')">🥳</span>
+            <span onclick="insertEmoji('👏')">👏</span><span onclick="insertEmoji('💀')">💀</span>
+            <span onclick="insertEmoji('🫡')">🫡</span><span onclick="insertEmoji('🤝')">🤝</span>
+            <span onclick="insertEmoji('💰')">💰</span><span onclick="insertEmoji('📈')">📈</span>
+            <span onclick="insertEmoji('🚀')">🚀</span><span onclick="insertEmoji('⭐')">⭐</span>
+            <span onclick="insertEmoji('💎')">💎</span><span onclick="insertEmoji('👑')">👑</span>
+            <span onclick="insertEmoji('🤑')">🤑</span><span onclick="insertEmoji('😎')">😎</span>
           </div>
           <div class="dm-composer">
-            <!-- Emoji btn -->
-            <button class="dm-emoji-btn" id="dmEmojiBtn" title="Emoji" type="button">😊</button>
-            <!-- Image btn -->
-            <label class="dm-img-btn" title="Send image">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <button class="dm-emoji-btn" id="dmEmojiBtn" type="button" title="Emoji">😊</button>
+            <label class="dm-img-btn" title="Send photo">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               <input id="dmImgInput" type="file" accept="image/*" style="display:none">
             </label>
-            <!-- Text input col -->
-            <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-              <div id="dmImgPreview"></div>
-              <input id="dmInput" class="dm-input" placeholder="Message…">
-            </div>
-            <!-- Send btn -->
-            <button class="dm-send-btn" style="opacity:0.5">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <input id="dmInput" class="dm-input" placeholder="Aa" autocomplete="off">
+            <button class="dm-send-btn" style="opacity:0.5" type="button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
           </div>
         </div>

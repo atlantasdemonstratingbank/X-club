@@ -1,98 +1,113 @@
-// messages.js — X Club v7 — WhatsApp-Style DM (image only, no video/call)
+// messages.js — X Club v7 — Messenger-style DM. Clean rebuild.
 'use strict';
 
-/* ══════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════
    CONVERSATION LIST
-   - Unread conversations shown first
-   - Live unread badge count on each row
-   - Simple fetch (no orderByChild to avoid bugs)
-══════════════════════════════════════════════ */
+   - Sorted: unread first, then by latest message time
+   - Shows last message preview (correct, not first)
+   - Shows unread count badge on each row
+   - Live — refreshes when startMsgWatch detects changes
+════════════════════════════════════════════════════════ */
 async function renderConversations() {
   const container = $('convList');
   if (!container) return;
+
+  // Show list, hide DM fullpage
   const lv = $('messagesListView'), dp = $('dmFullpage');
   if (lv) lv.style.display = 'block';
   if (dp) dp.style.display = 'none';
+
   if (!currentUser) { container.innerHTML = ''; return; }
+
   container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
   try {
+    // 1. Get all my connections
     const connSnap = await window.XF.get('connections/' + currentUser.uid);
-    if (!connSnap.exists() || Object.keys(connSnap.val()).length === 0) {
-      container.innerHTML = '<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>';
+    if (!connSnap.exists() || !Object.keys(connSnap.val()).length) {
+      container.innerHTML = `<div class="empty-state" style="padding:40px 16px">
+        <div class="empty-state-icon">💬</div>
+        <div class="empty-state-title">No messages yet</div>
+        <div class="empty-state-desc">Connect with members to start chatting</div>
+      </div>`;
       return;
     }
 
     const uids = Object.keys(connSnap.val());
 
-    // Fetch profiles
+    // 2. Fetch profiles
     const profiles = {};
     await Promise.all(uids.map(async uid => {
-      const s = await window.XF.get('users/' + uid);
-      if (s.exists()) profiles[uid] = s.val();
+      try {
+        const s = await window.XF.get('users/' + uid);
+        if (s.exists()) profiles[uid] = s.val();
+      } catch (e) {}
     }));
 
-    // Fetch ALL messages per conversation, pick the true latest
-    // We use a simple fetch + JS sort — Firebase push keys are time-ordered
-    // so limitToLast(1) is unreliable when old messages had ServerValue.TIMESTAMP
-    const previews = {}, unreadCounts = {}, lastTimes = {};
+    // 3. Fetch ALL messages for each conv — no limit, sort in JS to get true latest
+    const convData = {}; // uid -> { latest, unread, ts }
     await Promise.all(uids.map(async uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
-      // Get all messages (no limit, no orderBy — Firebase key order ≈ insertion order)
-      const dmSnap = await window.XF.db.ref('dms/' + convId).once('value');
-      if (dmSnap.exists()) {
+      try {
+        const dmSnap = await window.XF.db.ref('dms/' + convId).once('value');
+        if (!dmSnap.exists()) {
+          convData[uid] = { latest: null, unread: 0, ts: 0 };
+          return;
+        }
         const msgs = [];
         dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-        // Sort by createdAt ascending; messages with createdAt=0/null sort to front
+
+        // Sort ascending by createdAt — handles both Date.now() and old null timestamps
         msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-        // Pick latest — prefer messages with a real timestamp
+
+        // Latest = last message with a real timestamp, fallback to absolute last
         const withTs = msgs.filter(m => (m.createdAt || 0) > 0);
-        const latest = withTs.length > 0 ? withTs[withTs.length - 1] : msgs[msgs.length - 1];
-        previews[uid] = latest;
-        lastTimes[uid] = latest?.createdAt || 0;
-        unreadCounts[uid] = msgs.filter(m =>
-          m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid])
+        const latest = withTs.length ? withTs[withTs.length - 1] : msgs[msgs.length - 1];
+
+        // Unread = messages from partner not yet read by me
+        const unread = msgs.filter(m =>
+          m.senderUid !== currentUser.uid &&
+          (!m.readBy || !m.readBy[currentUser.uid])
         ).length;
-      } else {
-        lastTimes[uid] = 0;
-        unreadCounts[uid] = 0;
+
+        convData[uid] = { latest, unread, ts: latest?.createdAt || 0 };
+      } catch (e) {
+        convData[uid] = { latest: null, unread: 0, ts: 0 };
       }
     }));
 
-    // Sort: unread convs first, then by most recent message
+    // 4. Sort uids: unread first, then by most recent message
     uids.sort((a, b) => {
-      const aUnread = unreadCounts[a] > 0;
-      const bUnread = unreadCounts[b] > 0;
-      if (aUnread && !bUnread) return -1;
-      if (!aUnread && bUnread) return 1;
-      return (lastTimes[b] || 0) - (lastTimes[a] || 0);
+      const au = convData[a].unread > 0, bu = convData[b].unread > 0;
+      if (au && !bu) return -1;
+      if (!au && bu) return 1;
+      return (convData[b].ts || 0) - (convData[a].ts || 0);
     });
 
+    // 5. Render
     container.innerHTML = uids.map(uid => {
-      const p = profiles[uid]; if (!p) return '';
-      const preview = previews[uid];
-      const unread = unreadCounts[uid] || 0;
-      const previewText = preview
-        ? (preview.imageUrl ? '📷 Photo' : String(preview.text || '').slice(0, 40))
-        : 'Start a conversation';
-      const ts = preview?.createdAt ? timeAgo(preview.createdAt) : '';
+      const p = profiles[uid];
+      if (!p) return '';
+      const { latest, unread, ts } = convData[uid];
+      const previewText = latest
+        ? (latest.imageUrl ? '📷 Photo' : String(latest.text || '').slice(0, 50))
+        : 'Say hello!';
+      const timeStr = ts > 0 ? timeAgo(ts) : '';
+      const hasUnread = unread > 0;
 
-      // Avatar with unread overlay badge
-      const avatarWithBadge = `<div style="position:relative;flex-shrink:0">
-        ${avatarHTML(p, 'md')}
-        ${unread > 0 ? `<div class="conv-avatar-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
-      </div>`;
-
-      return `<div class="conversation-item${unread > 0 ? ' unread-conv' : ''}" onclick="openDMWith('${uid}')" data-uid="${uid}">
-        ${avatarWithBadge}
+      return `<div class="conv-row${hasUnread ? ' conv-row-unread' : ''}" onclick="openDMWith('${uid}')">
+        <div class="conv-avatar-wrap">
+          ${avatarHTML(p, 'md')}
+          ${hasUnread ? `<div class="conv-avatar-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
+        </div>
         <div class="conv-info">
-          <div class="conv-name-row">
-            <div class="conv-name${unread > 0 ? ' conv-name-bold' : ''}">${escapeHTML(p.displayName || 'Member')}${verifiedBadge(p.verified)}</div>
-            ${ts ? `<div class="conv-time${unread > 0 ? ' conv-time-unread' : ''}">${ts}</div>` : ''}
+          <div class="conv-top">
+            <span class="conv-name${hasUnread ? ' conv-name-bold' : ''}">${escapeHTML(p.displayName || 'Member')}${verifiedBadge(p.verified)}</span>
+            <span class="conv-time${hasUnread ? ' conv-time-accent' : ''}">${timeStr}</span>
           </div>
-          <div class="conv-preview-row">
-            <div class="conv-preview${unread > 0 ? ' conv-preview-unread' : ''}">${escapeHTML(previewText)}</div>
-            ${unread > 0 ? `<div class="conv-unread-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
+          <div class="conv-bottom">
+            <span class="conv-preview${hasUnread ? ' conv-preview-bold' : ''}">${escapeHTML(previewText)}</span>
+            ${hasUnread ? `<span class="conv-badge">${unread > 99 ? '99+' : unread}</span>` : ''}
           </div>
         </div>
       </div>`;
@@ -104,373 +119,392 @@ async function renderConversations() {
   }
 }
 
-/* ══════════════════════════════════════════════
-   DM FULLPAGE — WHATSAPP STYLE
-══════════════════════════════════════════════ */
-let _typingUnsubscribe = null, _typingTimer = null;
-let _dmPartner = null;
-let _dmEmojiOpen = false;
-let _activeReplyMsg = null;
+/* ════════════════════════════════════════════════════════
+   DM FULLPAGE — MESSENGER STYLE
+   Features:
+   - Blue sender bubbles (right) / grey receiver (left)
+   - Real-time via child_added + child_changed + child_removed
+   - Date separators between days
+   - HH:MM timestamp on every bubble
+   - ✓✓ read receipts (grey = sent, blue = read)
+   - Reply to message (swipe-style bar)
+   - Emoji picker (30 emojis)
+   - Image send (photo only)
+   - Long-press / right-click context menu:
+       React (6 quick emojis)
+       Reply / Star / Copy / Delete (own only)
+   - Reaction pills under bubbles
+   - Starred message indicator
+   - Typing indicator
+   - Popup notification when message arrives while elsewhere
+════════════════════════════════════════════════════════ */
 
-const QUICK_REACTIONS = ['❤️', '😂', '👍', '😮', '😢', '😡'];
+let _dmPartner = null;
+let _dmTypingOff = null;
+let _dmTypingTimer = null;
+let _dmMsgOff = null;     // unsubscribe fn for message listeners
+let _dmReplyMsg = null;   // message being replied to
+let _dmEmojiOpen = false;
+let _dmMsgCache = {};     // msgId -> msgObj for current conv
+
+const _REACTIONS = ['❤️','😂','👍','😮','😢','😡'];
+const _EMOJIS = ['❤️','😂','😮','😢','😡','👍','👎','🔥','🎉','💯','😍','🙏','💪','✅','😭','🤣','😁','🥳','👏','💀','🫡','🤝','💰','📈','🚀','⭐','💎','👑','🤑','😎'];
 
 async function openDMWith(uid) {
-  if (msgUnsubscribe) { try { msgUnsubscribe(); } catch (e) {} msgUnsubscribe = null; }
-  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} _typingUnsubscribe = null; }
+  // Teardown previous chat
+  _dmTeardown();
 
   if (activePage !== 'messages') showPage('messages');
   activeConvUid = uid;
 
-  const snap = await window.XF.get('users/' + uid);
-  _dmPartner = snap.exists() ? snap.val() : null;
-
+  // Show DM view, hide list
   const lv = $('messagesListView'), dp = $('dmFullpage');
   if (lv) lv.style.display = 'none';
   if (!dp) return;
   dp.style.display = 'flex';
 
-  // Header
-  const hdr = $('dmFullpageHeader');
-  if (hdr) hdr.innerHTML = `
-    <div class="dm-back-btn" onclick="closeDMFullpage()">←</div>
-    <div onclick="openUserProfile('${uid}',event)" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
-      ${avatarHTML(_dmPartner, 'md')}
-      <div>
-        <div style="display:flex;align-items:center;gap:4px;font-weight:700">${escapeHTML(_dmPartner?.displayName || 'Member')}${verifiedBadge(_dmPartner?.verified)}</div>
-        <div style="font-size:0.8rem;color:var(--text-dim)" id="dmOnlineStatus">@${escapeHTML(_dmPartner?.handle || 'member')}</div>
-      </div>
-    </div>`;
+  // Load partner profile
+  try {
+    const s = await window.XF.get('users/' + uid);
+    _dmPartner = s.exists() ? s.val() : null;
+  } catch (e) { _dmPartner = null; }
 
-  // Wire input
-  const dmInput = $('dmInput');
-  if (dmInput) {
-    dmInput.onkeydown = function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDMText(uid); } };
-    dmInput.oninput = function () { sendTypingIndicator(uid); updateSendBtn(); };
-    dmInput.value = '';
-    updateSendBtn();
-  }
+  // Render header
+  _dmRenderHeader(uid);
 
-  // Wire send btn
-  const sendBtn = dp.querySelector('.dm-send-btn');
-  if (sendBtn) sendBtn.onclick = function () { sendDMText(uid); };
+  // Wire up composer
+  _dmWireComposer(uid);
 
-  // Wire image input
-  const imgInput = $('dmImgInput');
-  if (imgInput) { imgInput.value = ''; imgInput.onchange = function () { handleDMImagePreview(this, uid); }; }
-
-  // Wire emoji btn
-  const emojiBtn = $('dmEmojiBtn');
-  if (emojiBtn) emojiBtn.onclick = function (e) { e.stopPropagation(); toggleEmojiPicker(); };
-
-  // Close emoji picker on outside click
-  document.addEventListener('click', function _closeEmoji(e) {
-    const picker = $('dmEmojiPicker');
-    if (picker && !picker.contains(e.target) && e.target.id !== 'dmEmojiBtn') {
-      picker.style.display = 'none'; _dmEmojiOpen = false;
-    }
-  });
-
+  // Start listeners
   const convId = [currentUser.uid, uid].sort().join('_');
-
-  // Typing listener
-  _typingUnsubscribe = window.XF.on('typing/' + convId + '/' + uid, function (tSnap) {
-    const statusEl = $('dmOnlineStatus'); if (!statusEl) return;
-    if (tSnap.exists() && tSnap.val() === true) {
-      statusEl.innerHTML = '<span style="color:var(--success);font-size:0.78rem">● typing…</span>';
-    } else {
-      statusEl.textContent = '@' + escapeHTML(_dmPartner?.handle || 'member');
-      statusEl.style.color = 'var(--text-dim)';
-    }
-  });
-
-  // ─── REAL-TIME MESSAGE LISTENER ───
-  // Uses child_added / child_changed / child_removed — never misses a message
-  let _readDebounce = null;
-  const _msgs = {};
-
-  function _rerender() {
-    const msgEl = $('dmMessages');
-    if (!msgEl) return;
-    const sorted = Object.values(_msgs).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    if (sorted.length === 0) {
-      msgEl.innerHTML = '<div class="dm-empty-state">Say hello! 👋</div>';
-      return;
-    }
-    const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
-    try {
-      msgEl.innerHTML = renderMessagesHTML(sorted, uid, convId);
-    } catch (err) {
-      console.error('[DM render]', err);
-      return;
-    }
-    if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
-    clearTimeout(_readDebounce);
-    _readDebounce = setTimeout(function () {
-      if (activeConvUid === uid) markMessagesRead(convId);
-    }, 800);
-  }
-
-  msgUnsubscribe = (function () {
-    const ref = window.XF.db.ref('dms/' + convId);
-    const refLimited = ref.limitToLast(100);
-
-    const onAdd = function (snap) { _msgs[snap.key] = { id: snap.key, ...snap.val() }; _rerender(); };
-    const onChange = function (snap) { _msgs[snap.key] = { id: snap.key, ...snap.val() }; _rerender(); };
-    const onRemove = function (snap) { delete _msgs[snap.key]; _rerender(); };
-
-    refLimited.on('child_added', onAdd);
-    ref.on('child_changed', onChange);
-    ref.on('child_removed', onRemove);
-
-    return function () {
-      refLimited.off('child_added', onAdd);
-      ref.off('child_changed', onChange);
-      ref.off('child_removed', onRemove);
-    };
-  })();
+  _dmStartListeners(uid, convId);
 }
 
-/* ══════════════════════════════════════════════
-   RENDER MESSAGES HTML (WhatsApp layout)
-══════════════════════════════════════════════ */
-function renderMessagesHTML(msgs, uid, convId) {
-  let html = '';
-  let lastDate = '';
+function _dmTeardown() {
+  if (_dmMsgOff) { try { _dmMsgOff(); } catch(e){} _dmMsgOff = null; }
+  if (_dmTypingOff) { try { _dmTypingOff(); } catch(e){} _dmTypingOff = null; }
+  if (_dmTypingTimer) { clearTimeout(_dmTypingTimer); _dmTypingTimer = null; }
+  if (currentUser && activeConvUid) {
+    const cid = [currentUser.uid, activeConvUid].sort().join('_');
+    window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
+  }
+  _dmMsgCache = {};
+  _dmPartner = null;
+  _dmReplyMsg = null;
+  _dmEmojiOpen = false;
+  cancelReply();
+}
 
-  msgs.forEach(function (m) {
+function _dmRenderHeader(uid) {
+  const hdr = $('dmFullpageHeader');
+  if (!hdr) return;
+  hdr.innerHTML = `
+    <div class="dm-back-btn" onclick="closeDMFullpage()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+    <div class="dm-header-info" onclick="openUserProfile('${uid}',event)">
+      ${avatarHTML(_dmPartner, 'md')}
+      <div>
+        <div class="dm-header-name">${escapeHTML(_dmPartner?.displayName || 'Member')}${verifiedBadge(_dmPartner?.verified)}</div>
+        <div class="dm-header-status" id="dmStatus">@${escapeHTML(_dmPartner?.handle || '')}</div>
+      </div>
+    </div>`;
+}
+
+function _dmWireComposer(uid) {
+  const input = $('dmInput');
+  if (input) {
+    input.value = '';
+    input.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dmSendText(uid); } };
+    input.oninput = () => { dmTyping(uid); dmUpdateSendBtn(); };
+  }
+  const sendBtn = document.querySelector('#dmFullpage .dm-send-btn');
+  if (sendBtn) sendBtn.onclick = () => dmSendText(uid);
+
+  const imgInput = $('dmImgInput');
+  if (imgInput) { imgInput.value = ''; imgInput.onchange = () => dmSendImage(imgInput, uid); }
+
+  const emojiBtn = $('dmEmojiBtn');
+  if (emojiBtn) emojiBtn.onclick = e => { e.stopPropagation(); dmToggleEmoji(); };
+
+  // Close emoji on outside click
+  document.addEventListener('click', function _ce(e) {
+    if (!$('dmEmojiPicker')?.contains(e.target) && e.target.id !== 'dmEmojiBtn') {
+      const picker = $('dmEmojiPicker');
+      if (picker) picker.style.display = 'none';
+      _dmEmojiOpen = false;
+    }
+  });
+
+  dmUpdateSendBtn();
+}
+
+function _dmStartListeners(uid, convId) {
+  const ref = window.XF.db.ref('dms/' + convId);
+
+  // Load last 100 messages via child_added (fires for existing + new)
+  const refLast = ref.limitToLast(100);
+
+  const onAdd = snap => {
+    _dmMsgCache[snap.key] = { id: snap.key, ...snap.val() };
+    _dmRender(uid, convId);
+  };
+  const onChange = snap => {
+    _dmMsgCache[snap.key] = { id: snap.key, ...snap.val() };
+    _dmRender(uid, convId);
+  };
+  const onRemove = snap => {
+    delete _dmMsgCache[snap.key];
+    _dmRender(uid, convId);
+  };
+
+  refLast.on('child_added', onAdd);
+  ref.on('child_changed', onChange);
+  ref.on('child_removed', onRemove);
+
+  _dmMsgOff = () => {
+    refLast.off('child_added', onAdd);
+    ref.off('child_changed', onChange);
+    ref.off('child_removed', onRemove);
+  };
+
+  // Typing indicator
+  const typRef = window.XF.db.ref('typing/' + convId + '/' + uid);
+  const onType = snap => {
+    const st = $('dmStatus'); if (!st) return;
+    if (snap.val() === true) {
+      st.innerHTML = '<span style="color:#00c853;font-size:0.78rem">● typing…</span>';
+    } else {
+      st.textContent = '@' + escapeHTML(_dmPartner?.handle || '');
+    }
+  };
+  typRef.on('value', onType);
+  _dmTypingOff = () => typRef.off('value', onType);
+}
+
+/* ─── RENDER MESSAGES ─── */
+let _dmRenderDebounce = null;
+function _dmRender(uid, convId) {
+  clearTimeout(_dmRenderDebounce);
+  _dmRenderDebounce = setTimeout(() => _dmDoRender(uid, convId), 30);
+}
+
+function _dmDoRender(uid, convId) {
+  const msgEl = $('dmMessages'); if (!msgEl) return;
+
+  const msgs = Object.values(_dmMsgCache).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+  if (!msgs.length) {
+    msgEl.innerHTML = `<div class="dm-empty">Start the conversation! 👋</div>`;
+    return;
+  }
+
+  const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
+  const html = _buildMsgsHTML(msgs, uid, convId);
+  msgEl.innerHTML = html;
+  if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
+
+  // Mark incoming as read after short delay
+  setTimeout(() => { if (activeConvUid === uid) _markRead(convId); }, 800);
+}
+
+function _buildMsgsHTML(msgs, uid, convId) {
+  let html = '';
+  let lastDateStr = '';
+
+  msgs.forEach(m => {
     const isMe = m.senderUid === currentUser.uid;
 
     // Date separator
-    const msgDate = m.createdAt
-      ? new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
-      : '';
-    if (msgDate && msgDate !== lastDate) {
-      html += `<div class="dm-date-sep"><span>${msgDate}</span></div>`;
-      lastDate = msgDate;
+    if (m.createdAt > 0) {
+      const ds = new Date(m.createdAt).toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' });
+      if (ds !== lastDateStr) {
+        html += `<div class="dm-date-sep"><span>${ds}</span></div>`;
+        lastDateStr = ds;
+      }
     }
 
-    const isStarred = m.starred && m.starred[currentUser.uid];
-
-    // Reactions
-    let reactionsHTML = '';
-    if (m.reactions && Object.keys(m.reactions).length > 0) {
-      const counts = {};
-      Object.values(m.reactions).forEach(r => { counts[r] = (counts[r] || 0) + 1; });
-      reactionsHTML = `<div class="dm-reactions">${Object.entries(counts).map(([emoji, count]) =>
-        `<span class="dm-reaction-pill${m.reactions[currentUser.uid] === emoji ? ' mine' : ''}"
-          onclick="toggleReaction('${convId}','${m.id}','${emoji}')">${emoji}${count > 1 ? ' ' + count : ''}</span>`
-      ).join('')}</div>`;
-    }
-
-    // Reply reference
+    // Reply preview
     let replyHTML = '';
     if (m.replyTo) {
-      replyHTML = `<div class="dm-reply-ref" onclick="scrollToMsg('${m.replyTo.id}')">
-        <div class="dm-reply-ref-name">${escapeHTML(m.replyTo.senderName || 'Message')}</div>
-        <div class="dm-reply-ref-text">${m.replyTo.imageUrl ? '📷 Photo' : escapeHTML((m.replyTo.text || '').slice(0, 50))}</div>
+      replyHTML = `<div class="dm-reply-preview-bubble" onclick="dmScrollTo('${m.replyTo.id}')">
+        <div class="dm-reply-name">${escapeHTML(m.replyTo.senderName || '')}</div>
+        <div class="dm-reply-text">${m.replyTo.imageUrl ? '📷 Photo' : escapeHTML((m.replyTo.text||'').slice(0,50))}</div>
       </div>`;
     }
 
     // Content
-    let contentHTML = '';
-    if (m.imageUrl) contentHTML += `<img src="${escapeHTML(m.imageUrl)}" loading="lazy" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo" class="dm-msg-image">`;
-    if (m.text) contentHTML += `<span class="dm-msg-text">${escapeHTML(m.text)}</span>`;
+    let content = '';
+    if (m.imageUrl) content += `<img src="${escapeHTML(m.imageUrl)}" class="dm-img-bubble" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" loading="lazy">`;
+    if (m.text) content += `<span class="dm-text">${escapeHTML(m.text)}</span>`;
 
-    // Read ticks (sender only)
-    let statusHTML = '';
-    if (isMe) {
-      const isRead = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
-      statusHTML = `<span class="msg-tick${isRead ? ' read' : ' sent'}" title="${isRead ? 'Read' : 'Sent'}">✓✓</span>`;
+    // Footer: time + ticks
+    const t = m.createdAt > 0 ? new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+    const isRead = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
+    const ticks = isMe ? `<span class="dm-ticks${isRead?' read':''}" title="${isRead?'Read':'Sent'}">✓✓</span>` : '';
+    const starred = m.starred?.[currentUser.uid] ? '<span class="dm-starred">⭐</span>' : '';
+
+    // Reactions
+    let reactHTML = '';
+    if (m.reactions && Object.keys(m.reactions).length) {
+      const counts = {};
+      Object.values(m.reactions).forEach(r => { counts[r] = (counts[r]||0)+1; });
+      reactHTML = `<div class="dm-reacts">
+        ${Object.entries(counts).map(([e,c]) =>
+          `<span class="dm-react${m.reactions[currentUser.uid]===e?' mine':''}" onclick="dmReact('${convId}','${m.id}','${e}')">${e}${c>1?' '+c:''}</span>`
+        ).join('')}
+      </div>`;
     }
 
-    const timeStr = m.createdAt
-      ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : '';
-
-    html += `<div class="chat-msg-wrap${isMe ? ' me' : ' them'}" id="msg-${m.id}"
-      data-msgid="${m.id}" data-convid="${convId}" data-sender="${isMe ? 'me' : 'them'}"
-      oncontextmenu="showMsgMenu(event,this)"
-      ontouchstart="startMsgHold(event,this)" ontouchend="cancelMsgHold()" ontouchmove="cancelMsgHold()">
-      ${!isMe ? `<div class="chat-msg-avatar">${avatarHTML(_dmPartner, 'sm')}</div>` : ''}
-      <div class="chat-msg-col">
+    html += `<div class="dm-wrap${isMe?' me':' them'}" id="dmm-${m.id}"
+      data-mid="${m.id}" data-cid="${convId}" data-me="${isMe?1:0}"
+      oncontextmenu="dmCtxMenu(event,this)"
+      ontouchstart="dmHoldStart(event,this)" ontouchend="dmHoldEnd()" ontouchmove="dmHoldEnd()">
+      ${!isMe ? `<div class="dm-avatar">${avatarHTML(_dmPartner,'sm')}</div>` : ''}
+      <div class="dm-col">
         ${replyHTML}
-        <div class="chat-msg${isMe ? ' me' : ' them'}${isStarred ? ' starred' : ''}">
-          ${isStarred ? '<span class="dm-star-badge" title="Starred">⭐</span>' : ''}
-          ${contentHTML}
-          <div class="dm-msg-footer">
-            <span class="dm-msg-time">${timeStr}</span>
-            ${statusHTML}
-          </div>
+        <div class="dm-bubble${isMe?' me':' them'}">
+          ${starred}${content}
+          <div class="dm-meta"><span class="dm-time">${t}</span>${ticks}</div>
         </div>
-        ${reactionsHTML}
+        ${reactHTML}
       </div>
     </div>`;
   });
-
   return html;
 }
 
-/* ══════════════════════════════════════════════
-   EMOJI PICKER
-══════════════════════════════════════════════ */
-function toggleEmojiPicker() {
-  const picker = $('dmEmojiPicker');
-  if (!picker) return;
-  _dmEmojiOpen = !_dmEmojiOpen;
-  picker.style.display = _dmEmojiOpen ? 'flex' : 'none';
-}
+/* ─── CONTEXT MENU ─── */
+let _dmHoldTimer = null;
+function dmHoldStart(e, el) { _dmHoldTimer = setTimeout(() => dmCtxMenu(e, el), 500); }
+function dmHoldEnd() { clearTimeout(_dmHoldTimer); }
 
-function insertEmoji(emoji) {
-  const input = $('dmInput'); if (!input) return;
-  const pos = input.selectionStart || input.value.length;
-  input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
-  input.focus();
-  input.selectionStart = input.selectionEnd = pos + emoji.length;
-  updateSendBtn();
-  const picker = $('dmEmojiPicker');
-  if (picker) { picker.style.display = 'none'; _dmEmojiOpen = false; }
-}
-
-function updateSendBtn() {
-  const input = $('dmInput'), btn = document.querySelector('.dm-send-btn');
-  if (!btn) return;
-  const hasContent = (input?.value?.trim().length > 0) || ($('dmImgPreview')?.innerHTML?.trim().length > 0);
-  btn.style.opacity = hasContent ? '1' : '0.5';
-}
-
-/* ══════════════════════════════════════════════
-   MESSAGE CONTEXT MENU
-══════════════════════════════════════════════ */
-let _msgHoldTimer = null;
-
-function startMsgHold(e, el) { _msgHoldTimer = setTimeout(function () { showMsgMenu(e, el); }, 500); }
-function cancelMsgHold() { clearTimeout(_msgHoldTimer); }
-
-function showMsgMenu(e, el) {
+function dmCtxMenu(e, el) {
   e.preventDefault(); e.stopPropagation();
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  const msgId = el.dataset.msgid, convId = el.dataset.convid;
-  const isMe = el.dataset.sender === 'me';
-  if (!msgId || !convId) return;
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
+  const mid = el.dataset.mid, cid = el.dataset.cid, isMe = el.dataset.me === '1';
+  if (!mid || !cid) return;
 
   const menu = document.createElement('div');
-  menu.className = 'msg-ctx-menu';
+  menu.className = 'dm-ctx';
   menu.innerHTML = `
-    <div class="msg-ctx-reactions">
-      ${QUICK_REACTIONS.map(emoji =>
-        `<span class="msg-ctx-reaction" onclick="toggleReaction('${convId}','${msgId}','${emoji}')">${emoji}</span>`
-      ).join('')}
+    <div class="dm-ctx-reacts">
+      ${_REACTIONS.map(r => `<span class="dm-ctx-react" onclick="dmReact('${cid}','${mid}','${r}')">${r}</span>`).join('')}
     </div>
-    <div class="msg-ctx-item" onclick="replyToMsg('${convId}','${msgId}')">↩ Reply</div>
-    <div class="msg-ctx-item" onclick="starMsg('${convId}','${msgId}')">⭐ Star</div>
-    <div class="msg-ctx-item" onclick="copyMsgText('${msgId}')">📋 Copy</div>
-    ${isMe ? `<div class="msg-ctx-item delete" onclick="deleteDMMessage('${convId}','${msgId}')">🗑 Delete</div>` : ''}`;
+    <div class="dm-ctx-item" onclick="dmReply('${cid}','${mid}')">↩ Reply</div>
+    <div class="dm-ctx-item" onclick="dmStar('${cid}','${mid}')">⭐ Star</div>
+    <div class="dm-ctx-item" onclick="dmCopy('${mid}')">📋 Copy</div>
+    ${isMe ? `<div class="dm-ctx-item danger" onclick="dmDelete('${cid}','${mid}')">🗑 Delete</div>` : ''}`;
 
   const rect = el.getBoundingClientRect();
   const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
-  const left = rect.left > window.innerWidth / 2
-    ? (window.innerWidth - rect.right) + 'px'
-    : Math.max(8, rect.left) + 'px';
-  menu.style.cssText = `position:fixed;top:${top}px;${rect.left > window.innerWidth / 2 ? 'right:' + left : 'left:' + left};z-index:9999`;
+  const fromRight = el.getBoundingClientRect().left > window.innerWidth / 2;
+  menu.style.cssText = `position:fixed;top:${top}px;${fromRight?'right:'+(window.innerWidth-rect.right)+'px':'left:'+Math.max(8,rect.left)+'px'};z-index:9999`;
   document.body.appendChild(menu);
-
-  setTimeout(function () {
-    document.addEventListener('click', function h() { menu.remove(); document.removeEventListener('click', h); }, { once: true });
-  }, 50);
+  setTimeout(() => document.addEventListener('click', function h(){menu.remove();document.removeEventListener('click',h);},{once:true}), 50);
 }
 
-/* ══════════════════════════════════════════════
-   MESSAGE ACTIONS
-══════════════════════════════════════════════ */
-async function toggleReaction(convId, msgId, emoji) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
+/* ─── MESSAGE ACTIONS ─── */
+async function dmReact(cid, mid, emoji) {
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
   if (!currentUser) return;
+  const path = 'dms/' + cid + '/' + mid + '/reactions/' + currentUser.uid;
   try {
-    const snap = await window.XF.get('dms/' + convId + '/' + msgId + '/reactions/' + currentUser.uid);
-    if (snap.exists() && snap.val() === emoji) {
-      await window.XF.remove('dms/' + convId + '/' + msgId + '/reactions/' + currentUser.uid);
-    } else {
-      await window.XF.set('dms/' + convId + '/' + msgId + '/reactions/' + currentUser.uid, emoji);
-    }
-  } catch (e) { showToast('Could not add reaction'); }
+    const s = await window.XF.get(path);
+    if (s.exists() && s.val() === emoji) await window.XF.remove(path);
+    else await window.XF.set(path, emoji);
+  } catch(e) {}
 }
 
-async function replyToMsg(convId, msgId) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  try {
-    const snap = await window.XF.get('dms/' + convId + '/' + msgId);
-    if (!snap.exists()) return;
-    const msg = snap.val();
-    _activeReplyMsg = {
-      id: msgId,
-      text: msg.text || '',
-      imageUrl: msg.imageUrl || '',
-      senderName: msg.senderUid === currentUser.uid ? 'You' : (_dmPartner?.displayName || 'Member')
-    };
-    const bar = $('dmReplyBar');
-    if (bar) {
-      bar.style.display = 'flex';
-      const preview = bar.querySelector('.dm-reply-preview');
-      if (preview) preview.innerHTML = `<strong>${escapeHTML(_activeReplyMsg.senderName)}</strong><br>
-        <span>${_activeReplyMsg.imageUrl ? '📷 Photo' : escapeHTML(_activeReplyMsg.text.slice(0, 60))}</span>`;
-    }
-    $('dmInput')?.focus();
-  } catch (e) {}
+async function dmReply(cid, mid) {
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
+  const m = _dmMsgCache[mid]; if (!m) return;
+  _dmReplyMsg = {
+    id: mid,
+    text: m.text || '',
+    imageUrl: m.imageUrl || '',
+    senderName: m.senderUid === currentUser.uid ? 'You' : (_dmPartner?.displayName || 'Member')
+  };
+  const bar = $('dmReplyBar');
+  if (bar) {
+    bar.style.display = 'flex';
+    const prev = bar.querySelector('.dm-reply-preview');
+    if (prev) prev.innerHTML = `<strong>${escapeHTML(_dmReplyMsg.senderName)}</strong><br><span>${_dmReplyMsg.imageUrl ? '📷 Photo' : escapeHTML(_dmReplyMsg.text.slice(0,60))}</span>`;
+  }
+  $('dmInput')?.focus();
 }
 
 function cancelReply() {
-  _activeReplyMsg = null;
+  _dmReplyMsg = null;
   const bar = $('dmReplyBar'); if (bar) bar.style.display = 'none';
 }
 
-async function starMsg(convId, msgId) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  if (!currentUser) return;
+async function dmStar(cid, mid) {
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
+  const path = 'dms/' + cid + '/' + mid + '/starred/' + currentUser.uid;
   try {
-    const snap = await window.XF.get('dms/' + convId + '/' + msgId + '/starred/' + currentUser.uid);
-    if (snap.exists()) { await window.XF.remove('dms/' + convId + '/' + msgId + '/starred/' + currentUser.uid); showToast('Star removed'); }
-    else { await window.XF.set('dms/' + convId + '/' + msgId + '/starred/' + currentUser.uid, true); showToast('⭐ Message starred'); }
-  } catch (e) {}
+    const s = await window.XF.get(path);
+    if (s.exists()) { await window.XF.remove(path); showToast('Star removed'); }
+    else { await window.XF.set(path, true); showToast('⭐ Starred'); }
+  } catch(e) {}
 }
 
-async function copyMsgText(msgId) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  const el = document.getElementById('msg-' + msgId);
-  if (!el) return;
-  const textEl = el.querySelector('.dm-msg-text');
-  const text = textEl ? textEl.textContent : '';
-  if (text) navigator.clipboard?.writeText(text).then(() => showToast('Copied!')).catch(() => showToast('Copy failed'));
+function dmCopy(mid) {
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
+  const m = _dmMsgCache[mid];
+  if (m?.text) navigator.clipboard?.writeText(m.text).then(() => showToast('Copied!')).catch(() => {});
 }
 
-async function deleteDMMessage(convId, msgId) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  try { await window.XF.remove('dms/' + convId + '/' + msgId); }
-  catch (e) { showToast('Could not delete message'); }
+async function dmDelete(cid, mid) {
+  document.querySelectorAll('.dm-ctx').forEach(m => m.remove());
+  try { await window.XF.remove('dms/' + cid + '/' + mid); }
+  catch(e) { showToast('Could not delete'); }
 }
 
-function scrollToMsg(msgId) {
-  const el = document.getElementById('msg-' + msgId);
+function dmScrollTo(mid) {
+  const el = document.getElementById('dmm-' + mid);
   if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('dm-msg-highlight');
-    setTimeout(() => el.classList.remove('dm-msg-highlight'), 1500);
+    el.scrollIntoView({ behavior:'smooth', block:'center' });
+    el.classList.add('dm-highlight');
+    setTimeout(() => el.classList.remove('dm-highlight'), 1500);
   }
 }
 
-/* ══════════════════════════════════════════════
-   SEND TEXT MESSAGE
-══════════════════════════════════════════════ */
-function sendTypingIndicator(uid) {
+/* ─── EMOJI PICKER ─── */
+function dmToggleEmoji() {
+  const p = $('dmEmojiPicker'); if (!p) return;
+  _dmEmojiOpen = !_dmEmojiOpen;
+  p.style.display = _dmEmojiOpen ? 'flex' : 'none';
+}
+function insertEmoji(emoji) {
+  const input = $('dmInput'); if (!input) return;
+  const pos = input.selectionStart ?? input.value.length;
+  input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+  input.selectionStart = input.selectionEnd = pos + emoji.length;
+  input.focus();
+  dmUpdateSendBtn();
+  const p = $('dmEmojiPicker'); if (p) { p.style.display='none'; _dmEmojiOpen=false; }
+}
+
+function dmUpdateSendBtn() {
+  const btn = document.querySelector('#dmFullpage .dm-send-btn'); if (!btn) return;
+  const hasText = ($('dmInput')?.value?.trim()?.length || 0) > 0;
+  btn.style.opacity = hasText ? '1' : '0.5';
+}
+
+/* ─── TYPING INDICATOR ─── */
+function dmTyping(uid) {
   if (!currentUser || !uid) return;
-  const convId = [currentUser.uid, uid].sort().join('_');
-  window.XF.set('typing/' + convId + '/' + currentUser.uid, true).catch(() => {});
-  clearTimeout(_typingTimer);
-  _typingTimer = setTimeout(function () {
-    window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
+  const cid = [currentUser.uid, uid].sort().join('_');
+  window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(true).catch(()=>{});
+  clearTimeout(_dmTypingTimer);
+  _dmTypingTimer = setTimeout(() => {
+    window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
   }, 2500);
 }
 
-async function markMessagesRead(convId) {
+/* ─── MARK MESSAGES READ ─── */
+async function _markRead(convId) {
   if (!currentUser) return;
   try {
     const snap = await window.XF.get('dms/' + convId);
@@ -478,18 +512,18 @@ async function markMessagesRead(convId) {
     const updates = {};
     snap.forEach(c => {
       const m = c.val();
-      if (m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid])) {
+      if (m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid]))
         updates['dms/' + convId + '/' + c.key + '/readBy/' + currentUser.uid] = true;
-      }
     });
-    if (Object.keys(updates).length > 0) {
+    if (Object.keys(updates).length) {
       await window.XF.multiUpdate(updates);
-      refreshMsgBadge(); // defined in notifications.js
+      refreshMsgBadge();
     }
-  } catch (e) {}
+  } catch(e) {}
 }
 
-async function sendDMText(uid) {
+/* ─── SEND TEXT ─── */
+async function dmSendText(uid) {
   uid = uid || activeConvUid;
   if (!uid || !currentUser) return;
   const input = $('dmInput');
@@ -497,112 +531,73 @@ async function sendDMText(uid) {
   if (!text) return;
 
   input.value = '';
-  updateSendBtn();
+  dmUpdateSendBtn();
 
-  const convId = [currentUser.uid, uid].sort().join('_');
-  window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
-  clearTimeout(_typingTimer);
+  const cid = [currentUser.uid, uid].sort().join('_');
+  // Clear typing
+  window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
+  clearTimeout(_dmTypingTimer);
 
-  const msgData = {
+  const msg = {
     senderUid: currentUser.uid,
-    text: text,
-    createdAt: Date.now(), // Date.now() not ServerValue.TIMESTAMP — keeps listener working
+    text,
+    createdAt: Date.now(),
     readBy: { [currentUser.uid]: true }
   };
-  if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
+  if (_dmReplyMsg) { msg.replyTo = { ..._dmReplyMsg }; cancelReply(); }
 
   try {
-    await window.XF.push('dms/' + convId, msgData);
-    notifyDMRecipient(uid, text);
+    await window.XF.push('dms/' + cid, msg);
+    _dmNotifyRecipient(uid, text);
     refreshMsgBadge();
-  } catch (err) {
+  } catch(err) {
     input.value = text;
-    updateSendBtn();
-    showToast('Failed to send — check your connection');
+    dmUpdateSendBtn();
+    showToast('Failed to send');
   }
 }
 
-async function notifyDMRecipient(toUid, preview) {
-  try {
-    await window.XF.push('notifications/' + toUid, {
-      type: 'new_message',
-      fromUid: currentUser.uid,
-      fromName: currentProfile?.displayName || 'Member',
-      preview: (preview || '').slice(0, 40),
-      createdAt: Date.now(), // fixed: was window.XF.ts()
-      read: false
-    });
-  } catch (e) {}
-}
-
-/* ══════════════════════════════════════════════
-   IMAGE SEND
-══════════════════════════════════════════════ */
-function handleDMImagePreview(inputEl, uid) {
-  if (!inputEl?.files?.[0]) return;
-  const preview = $('dmImgPreview');
-  if (preview) {
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      preview.innerHTML = `<div class="img-preview-wrap" style="margin:6px 0 0 4px">
-        <img src="${e.target.result}" style="max-width:120px;max-height:120px;border-radius:8px">
-        <div class="img-preview-remove" onclick="cancelDMImage()">✕</div>
-      </div>`;
-      updateSendBtn();
-      sendDMImage(inputEl, uid);
-    };
-    reader.readAsDataURL(inputEl.files[0]);
-  } else {
-    sendDMImage(inputEl, uid);
-  }
-}
-
-function cancelDMImage() {
-  const p = $('dmImgPreview'); if (p) p.innerHTML = '';
-  const i = $('dmImgInput'); if (i) i.value = '';
-  updateSendBtn();
-}
-
-async function sendDMImage(inputEl, uid) {
+/* ─── SEND IMAGE ─── */
+async function dmSendImage(inputEl, uid) {
   uid = uid || activeConvUid;
   if (!uid || !currentUser || !inputEl?.files?.[0]) return;
-  showToast('Uploading image…');
+  showToast('Uploading…');
   try {
     const r = await window.XCloud.upload(inputEl.files[0], 'dm_images');
-    const convId = [currentUser.uid, uid].sort().join('_');
-    const msgData = {
+    const cid = [currentUser.uid, uid].sort().join('_');
+    const msg = {
       senderUid: currentUser.uid,
       imageUrl: r.url,
       text: '',
       createdAt: Date.now(),
       readBy: { [currentUser.uid]: true }
     };
-    if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
-    await window.XF.push('dms/' + convId, msgData);
+    if (_dmReplyMsg) { msg.replyTo = { ..._dmReplyMsg }; cancelReply(); }
+    await window.XF.push('dms/' + cid, msg);
     inputEl.value = '';
-    const p = $('dmImgPreview'); if (p) p.innerHTML = '';
-    updateSendBtn();
-    notifyDMRecipient(uid, '📷 Photo');
+    _dmNotifyRecipient(uid, '📷 Photo');
     refreshMsgBadge();
-  } catch (e) {
-    showToast('Failed to send image');
-  }
+  } catch(e) { showToast('Image upload failed'); }
 }
 
-/* ══════════════════════════════════════════════
-   CLOSE DM
-══════════════════════════════════════════════ */
+/* ─── NOTIFY RECIPIENT ─── */
+async function _dmNotifyRecipient(toUid, preview) {
+  try {
+    await window.XF.push('notifications/' + toUid, {
+      type: 'new_message',
+      fromUid: currentUser.uid,
+      fromName: currentProfile?.displayName || 'Member',
+      preview: (preview || '').slice(0, 40),
+      createdAt: Date.now(),
+      read: false
+    });
+  } catch(e) {}
+}
+
+/* ─── CLOSE DM ─── */
 function closeDMFullpage() {
-  if (msgUnsubscribe) { try { msgUnsubscribe(); } catch (e) {} msgUnsubscribe = null; }
-  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} _typingUnsubscribe = null; }
-  if (_typingTimer) { clearTimeout(_typingTimer); _typingTimer = null; }
-  if (currentUser && activeConvUid) {
-    const convId = [currentUser.uid, activeConvUid].sort().join('_');
-    window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
-  }
-  cancelReply();
+  _dmTeardown();
   activeConvUid = null;
-  _dmPartner = null;
   const lv = $('messagesListView'), dp = $('dmFullpage');
   if (dp) dp.style.display = 'none';
   if (lv) lv.style.display = 'block';
