@@ -134,22 +134,24 @@ async function openDMWith(uid) {
     }
   });
 
-  // Real-time message listener — no _rendering guard (it blocks updates)
+  // Real-time message listener using child_added — fires for every new message reliably
   let _readDebounce = null;
+  const _msgs = {}; // local cache keyed by message id
+
   msgUnsubscribe = (function () {
-    const ref = window.XF.db.ref('dms/' + convId).orderByChild('createdAt').limitToLast(100);
-    const handler = function (msgSnap) {
+    const ref = window.XF.db.ref('dms/' + convId);
+
+    function rerender() {
       const msgEl = $('dmMessages');
       if (!msgEl) return;
-      const msgs = [];
-      if (msgSnap.exists()) msgSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-      if (msgs.length === 0) {
+      const sorted = Object.values(_msgs).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      if (sorted.length === 0) {
         msgEl.innerHTML = '<div class="dm-empty-state">Say hello! 👋</div>';
         return;
       }
       const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
       try {
-        msgEl.innerHTML = renderMessagesHTML(msgs, uid, convId);
+        msgEl.innerHTML = renderMessagesHTML(sorted, uid, convId);
       } catch (err) {
         console.error('[DM] render error:', err);
         return;
@@ -159,9 +161,31 @@ async function openDMWith(uid) {
       _readDebounce = setTimeout(function () {
         if (activeConvUid === uid) markMessagesRead(convId);
       }, 800);
+    }
+
+    // child_added fires for each existing message on load, then for every new one
+    const onAdd = ref.limitToLast(100).on('child_added', function (snap) {
+      _msgs[snap.key] = { id: snap.key, ...snap.val() };
+      rerender();
+    });
+
+    // child_changed fires when readBy, reactions, etc. update
+    const onChange = ref.on('child_changed', function (snap) {
+      _msgs[snap.key] = { id: snap.key, ...snap.val() };
+      rerender();
+    });
+
+    // child_removed fires when a message is deleted
+    const onRemove = ref.on('child_removed', function (snap) {
+      delete _msgs[snap.key];
+      rerender();
+    });
+
+    return function () {
+      ref.off('child_added', onAdd);
+      ref.off('child_changed', onChange);
+      ref.off('child_removed', onRemove);
     };
-    ref.on('value', handler);
-    return function () { ref.off('value', handler); };
   })();
 }
 
@@ -438,27 +462,15 @@ async function sendDMText(uid) {
   const text = input?.value?.trim();
   if (!text) return;
 
-  // Daily message limit for unverified users
-  if (!currentProfile?.verified) {
-    const today = new Date().toISOString().slice(0, 10);
-    const limitKey = 'xclub_msg_' + currentUser.uid + '_' + today;
-    let sentToday = 0;
-    try { sentToday = parseInt(localStorage.getItem(limitKey) || '0'); } catch (e) { sentToday = 0; }
-    const DAILY_LIMIT = 10;
-    if (sentToday >= DAILY_LIMIT) { showToast('Message limit reached — get verified for unlimited messages'); return; }
-    try { localStorage.setItem(limitKey, String(sentToday + 1)); } catch (e) {}
-    const remaining = DAILY_LIMIT - sentToday - 1;
-    if (remaining <= 3) showToast(remaining + ' free messages remaining today');
-  }
-
   if (input) input.value = '';
   updateSendBtn();
   const convId = [currentUser.uid, uid].sort().join('_');
   window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
   clearTimeout(_typingTimer);
 
+  // Use Date.now() — ServerValue.TIMESTAMP is async and breaks orderByChild listeners
   const msgData = {
-    senderUid: currentUser.uid, text, createdAt: window.XF.ts(), readBy: { [currentUser.uid]: true }
+    senderUid: currentUser.uid, text, createdAt: Date.now(), readBy: { [currentUser.uid]: true }
   };
   if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
 
@@ -512,7 +524,7 @@ async function sendDMImage(inputEl, uid) {
   try {
     const r = await window.XCloud.upload(file, 'dm_images');
     const convId = [currentUser.uid, uid].sort().join('_');
-    const msgData = { senderUid: currentUser.uid, imageUrl: r.url, text: '', createdAt: window.XF.ts(), readBy: { [currentUser.uid]: true } };
+    const msgData = { senderUid: currentUser.uid, imageUrl: r.url, text: '', createdAt: Date.now(), readBy: { [currentUser.uid]: true } };
     if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
     await window.XF.push('dms/' + convId, msgData);
     inputEl.value = '';
