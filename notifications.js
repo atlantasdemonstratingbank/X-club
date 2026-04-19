@@ -1,26 +1,21 @@
-// notifications.js — X Club v7 — Notifications Rendering & Badge Watching
+// notifications.js — X Club v7
 'use strict';
 
-/* ══════════════════════════════════════════════
-   TIME FORMATTER
-══════════════════════════════════════════════ */
+/* ─── TIME FORMATTER ─── */
 function formatNotifTime(ts) {
   if (!ts) return '';
-  const d = new Date(ts);
-  const now = new Date();
-  const diffMins = Math.floor((now - d) / 60000);
-  const diffHours = Math.floor((now - d) / 3600000);
-  const diffDays = Math.floor((now - d) / 86400000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return diffMins + 'm ago';
-  if (diffHours < 24) return diffHours + 'h ago';
-  if (diffDays < 7) return diffDays + 'd ago';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(ts), now = new Date();
+  const mins = Math.floor((now - d) / 60000);
+  const hours = Math.floor((now - d) / 3600000);
+  const days = Math.floor((now - d) / 86400000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  if (hours < 24) return hours + 'h ago';
+  if (days < 7) return days + 'd ago';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/* ══════════════════════════════════════════════
-   BADGE HELPER
-══════════════════════════════════════════════ */
+/* ─── BADGE HELPER ─── */
 function _setBadge(type, count) {
   const ids = type === 'notif' ? ['navNotifBadge', 'mobileNotifBadge'] : ['navMsgBadge', 'mobileMsgBadge'];
   ids.forEach(id => {
@@ -30,9 +25,23 @@ function _setBadge(type, count) {
   });
 }
 
-/* ══════════════════════════════════════════════
-   RENDER NOTIFICATIONS
-══════════════════════════════════════════════ */
+/* ─── MARK ALL READ ─── */
+async function markAllNotifsRead() {
+  if (!currentUser) return;
+  const btn = $('markAllReadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+  try {
+    const snap = await window.XF.get('notifications/' + currentUser.uid);
+    if (!snap.exists()) return;
+    const updates = {};
+    snap.forEach(c => { if (!c.val().read) updates['notifications/' + currentUser.uid + '/' + c.key + '/read'] = true; });
+    if (Object.keys(updates).length > 0) await window.XF.multiUpdate(updates);
+    _setBadge('notif', 0);
+    renderNotifications();
+  } catch (e) { showToast('Could not mark as read'); }
+}
+
+/* ─── RENDER NOTIFICATIONS ─── */
 async function renderNotifications() {
   const container = $('notifList');
   if (!container || !currentUser) return;
@@ -48,7 +57,7 @@ async function renderNotifications() {
     return;
   }
 
-  // Deduplicate connection_request per sender
+  // Deduplicate: only latest connection_request per sender
   const seenConnReq = new Set();
   const deduped = notifs.filter(n => {
     if (n.type !== 'connection_request') return true;
@@ -56,40 +65,42 @@ async function renderNotifications() {
     seenConnReq.add(n.fromUid); return true;
   });
 
-  // Sort: unread first, then newest first within each group
+  // Sort: unread first, then newest
   deduped.sort((a, b) => {
     if (!a.read && b.read) return -1;
     if (a.read && !b.read) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
-  // Pre-fetch connection status for connection_request notifs
+  // Fetch connection statuses
   const connStatusMap = {};
-  await Promise.all(
-    deduped.filter(n => n.type === 'connection_request' && n.reqId).map(async n => {
-      try {
-        const cs = await window.XF.get('connections/' + currentUser.uid + '/' + n.fromUid);
-        if (cs.exists()) { connStatusMap[n.reqId] = 'connected'; return; }
-        const rs = await window.XF.get('connectionRequests/' + n.reqId);
-        connStatusMap[n.reqId] = rs.exists() ? rs.val().status : 'pending';
-      } catch (e) { connStatusMap[n.reqId] = 'pending'; }
-    })
-  );
+  await Promise.all(deduped.filter(n => n.type === 'connection_request' && n.reqId).map(async n => {
+    try {
+      const cs = await window.XF.get('connections/' + currentUser.uid + '/' + n.fromUid);
+      if (cs.exists()) { connStatusMap[n.reqId] = 'connected'; return; }
+      const rs = await window.XF.get('connectionRequests/' + n.reqId);
+      connStatusMap[n.reqId] = rs.exists() ? rs.val().status : 'pending';
+    } catch (e) { connStatusMap[n.reqId] = 'pending'; }
+  }));
 
-  let html = '';
-  let lastGroup = null; // 'unread' or 'read'
+  const hasUnread = deduped.some(n => !n.read);
+
+  // Mark all read button
+  let html = `<div class="notif-toolbar">
+    <span class="notif-toolbar-count">${deduped.length} notification${deduped.length !== 1 ? 's' : ''}</span>
+    ${hasUnread ? `<button id="markAllReadBtn" class="notif-mark-all-btn" onclick="markAllNotifsRead()">✓ Mark all as read</button>` : ''}
+  </div>`;
+
+  let lastGroup = null;
 
   deduped.forEach(n => {
     const isUnread = !n.read;
     const group = isUnread ? 'unread' : 'read';
 
-    // Section divider
     if (group !== lastGroup) {
-      if (group === 'unread') {
-        html += `<div class="notif-section-header" style="color:var(--accent);border-color:var(--accent-dim)">● Unread</div>`;
-      } else {
-        html += `<div class="notif-section-header" style="color:var(--text-dim)">✓ Earlier</div>`;
-      }
+      html += `<div class="notif-section-header ${group === 'unread' ? 'unread-header' : 'read-header'}">
+        ${group === 'unread' ? '● Unread' : '✓ Earlier'}
+      </div>`;
       lastGroup = group;
     }
 
@@ -113,8 +124,7 @@ async function renderNotifications() {
       html += `<div class="${cls}" onclick="openUserProfile('${n.fromUid}',event)">
         <div class="notif-icon">🤝</div>
         <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> wants to connect with you</div><div class="notif-time">${time}</div>${actionHTML}</div>
-        ${dot}
-      </div>`;
+        ${dot}</div>`;
       return;
     }
 
@@ -122,8 +132,7 @@ async function renderNotifications() {
       html += `<div class="${cls}" onclick="openUserProfile('${n.fromUid}',event)">
         <div class="notif-icon">✅</div>
         <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> accepted your connection request</div><div class="notif-time">${time}</div></div>
-        ${dot}
-      </div>`;
+        ${dot}</div>`;
       return;
     }
 
@@ -131,36 +140,20 @@ async function renderNotifications() {
       html += `<div class="${cls}" onclick="openDMWith('${n.fromUid}')">
         <div class="notif-icon">💬</div>
         <div class="notif-body"><div class="notif-text"><strong>${escapeHTML(n.fromName || 'Someone')}</strong> sent you a message${n.preview ? ': <em>' + escapeHTML(n.preview) + '</em>' : ''}</div><div class="notif-time">${time}</div></div>
-        ${dot}
-      </div>`;
+        ${dot}</div>`;
       return;
     }
 
     html += `<div class="${cls}">
       <div class="notif-icon">🔔</div>
       <div class="notif-body"><div class="notif-text">${escapeHTML(n.text || 'New notification')}</div><div class="notif-time">${time}</div></div>
-      ${dot}
-    </div>`;
+      ${dot}</div>`;
   });
 
   container.innerHTML = html;
-
-  // Mark all as read after 1.5s
-  const unreadItems = notifs.filter(n => !n.read);
-  if (unreadItems.length > 0) {
-    setTimeout(async () => {
-      const updates = {};
-      unreadItems.forEach(n => { updates['notifications/' + currentUser.uid + '/' + n.id + '/read'] = true; });
-      try { await window.XF.multiUpdate(updates); } catch (e) {}
-      _setBadge('notif', 0);
-    }, 1500);
-  }
 }
 
-/* ══════════════════════════════════════════════
-   NOTIF BADGE WATCHER
-   new_message excluded — it has its own msg badge
-══════════════════════════════════════════════ */
+/* ─── NOTIF BADGE WATCHER ─── */
 function startNotifWatch() {
   if (!currentUser) return;
   window.XF.on('notifications/' + currentUser.uid, snap => {
@@ -182,37 +175,47 @@ function startNotifWatch() {
   });
 }
 
-/* ══════════════════════════════════════════════
-   MSG BADGE WATCHER — real-time per-conversation
-══════════════════════════════════════════════ */
+/* ─── MSG BADGE WATCHER — live per-conversation ─── */
 let _msgBadgeListeners = [];
+let _lastMsgSnap = {}; // track last seen msg per conv for popup
 
 async function startMsgWatch() {
   if (!currentUser) return;
-
   window.XF.on('connections/' + currentUser.uid, async function (connSnap) {
-    // Tear down old listeners
     _msgBadgeListeners.forEach(fn => { try { fn(); } catch (e) {} });
     _msgBadgeListeners = [];
-
     if (!connSnap.exists()) { _setBadge('msg', 0); return; }
-
     const uids = Object.keys(connSnap.val());
-
-    // Watch each conversation for any change → recount
     uids.forEach(uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
       const ref = window.XF.db.ref('dms/' + convId);
-      const handler = function () {
+      const handler = async function (dmSnap) {
         refreshMsgBadge();
         if (activePage === 'messages' && $('messagesListView') && $('messagesListView').style.display !== 'none') {
           renderConversations();
+        }
+        // Show in-app message popup for new incoming messages
+        if (dmSnap.exists() && activeConvUid !== uid) {
+          const msgs = [];
+          dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
+          const latest = msgs[msgs.length - 1];
+          if (latest && latest.senderUid !== currentUser.uid && (!latest.readBy || !latest.readBy[currentUser.uid])) {
+            const prevKey = _lastMsgSnap[convId];
+            if (prevKey !== latest.id) {
+              _lastMsgSnap[convId] = latest.id;
+              // Fetch sender profile for popup
+              try {
+                const pSnap = await window.XF.get('users/' + uid);
+                const profile = pSnap.exists() ? pSnap.val() : { displayName: 'New message', photoURL: '' };
+                showMsgPopup(uid, profile, latest.imageUrl ? '📷 Photo' : (latest.text || ''));
+              } catch (e) {}
+            }
+          }
         }
       };
       ref.on('value', handler);
       _msgBadgeListeners.push(() => ref.off('value', handler));
     });
-
     refreshMsgBadge();
   });
 }
@@ -235,4 +238,36 @@ async function refreshMsgBadge() {
     }));
     _setBadge('msg', total);
   } catch (e) {}
+}
+
+/* ─── IN-APP MESSAGE POPUP ─── */
+let _popupTimer = null;
+function showMsgPopup(uid, profile, previewText) {
+  // Remove existing popup
+  const existing = document.querySelector('.msg-popup');
+  if (existing) existing.remove();
+  clearTimeout(_popupTimer);
+
+  const popup = document.createElement('div');
+  popup.className = 'msg-popup';
+  popup.innerHTML = `
+    <div class="msg-popup-avatar">${avatarHTML(profile, 'sm')}</div>
+    <div class="msg-popup-body">
+      <div class="msg-popup-name">${escapeHTML(profile.displayName || 'New message')}</div>
+      <div class="msg-popup-preview">${escapeHTML(previewText.slice(0, 60))}</div>
+    </div>
+    <div class="msg-popup-close" onclick="this.parentElement.remove()">✕</div>`;
+  popup.onclick = function (e) {
+    if (e.target.classList.contains('msg-popup-close')) return;
+    popup.remove();
+    openDMWith(uid);
+  };
+  document.body.appendChild(popup);
+  // Slide in
+  requestAnimationFrame(() => popup.classList.add('visible'));
+  // Auto-dismiss after 5s
+  _popupTimer = setTimeout(() => {
+    popup.classList.remove('visible');
+    setTimeout(() => popup.remove(), 400);
+  }, 5000);
 }

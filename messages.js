@@ -3,6 +3,9 @@
 
 /* ══════════════════════════════════════════════
    CONVERSATION LIST
+   - Unread conversations shown first
+   - Live unread badge count on each row
+   - Simple fetch (no orderByChild to avoid bugs)
 ══════════════════════════════════════════════ */
 async function renderConversations() {
   const container = $('convList');
@@ -12,46 +15,86 @@ async function renderConversations() {
   if (dp) dp.style.display = 'none';
   if (!currentUser) { container.innerHTML = ''; return; }
   container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
   try {
     const connSnap = await window.XF.get('connections/' + currentUser.uid);
     if (!connSnap.exists() || Object.keys(connSnap.val()).length === 0) {
       container.innerHTML = '<div class="empty-state" style="padding:32px 16px"><div class="empty-state-icon">◈</div><div class="empty-state-title">No messages yet</div><div class="empty-state-desc">Connect with members to start chatting</div></div>';
       return;
     }
+
     const uids = Object.keys(connSnap.val());
+
+    // Fetch profiles
     const profiles = {};
-    await Promise.all(uids.map(async uid => { const s = await window.XF.get('users/' + uid); if (s.exists()) profiles[uid] = s.val(); }));
-    const previews = {}, unreadCounts = {};
+    await Promise.all(uids.map(async uid => {
+      const s = await window.XF.get('users/' + uid);
+      if (s.exists()) profiles[uid] = s.val();
+    }));
+
+    // Fetch last 50 messages per conversation — sort in JS by createdAt (Firebase key order ≠ time order)
+    const previews = {}, unreadCounts = {}, lastTimes = {};
     await Promise.all(uids.map(async uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
-      const dmSnap = await window.XF.db.ref('dms/' + convId).orderByChild('createdAt').limitToLast(50).once('value');
+      const dmSnap = await window.XF.db.ref('dms/' + convId).limitToLast(50).once('value');
       if (dmSnap.exists()) {
-        const msgs = []; dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
-        if (msgs.length > 0) previews[uid] = msgs[msgs.length - 1];
-        unreadCounts[uid] = msgs.filter(m => m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid])).length;
+        const msgs = [];
+        dmSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
+        // Always sort by createdAt so newest is last regardless of Firebase key order
+        msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const latest = msgs[msgs.length - 1];
+        previews[uid] = latest;
+        lastTimes[uid] = latest?.createdAt || 0;
+        unreadCounts[uid] = msgs.filter(m =>
+          m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid])
+        ).length;
+      } else {
+        lastTimes[uid] = 0;
+        unreadCounts[uid] = 0;
       }
     }));
+
+    // Sort: unread convs first, then by most recent message
+    uids.sort((a, b) => {
+      const aUnread = unreadCounts[a] > 0;
+      const bUnread = unreadCounts[b] > 0;
+      if (aUnread && !bUnread) return -1;
+      if (!aUnread && bUnread) return 1;
+      return (lastTimes[b] || 0) - (lastTimes[a] || 0);
+    });
+
     container.innerHTML = uids.map(uid => {
       const p = profiles[uid]; if (!p) return '';
       const preview = previews[uid];
       const unread = unreadCounts[uid] || 0;
-      const previewText = preview ? (preview.imageUrl ? '📷 Photo' : String(preview.text || '').slice(0, 40)) : 'Start a conversation';
+      const previewText = preview
+        ? (preview.imageUrl ? '📷 Photo' : String(preview.text || '').slice(0, 40))
+        : 'Start a conversation';
       const ts = preview?.createdAt ? timeAgo(preview.createdAt) : '';
-      return `<div class="conversation-item${unread > 0 ? ' unread-conv' : ''}" onclick="openDMWith('${uid}')" data-uid="${uid}">
+
+      // Avatar with unread overlay badge
+      const avatarWithBadge = `<div style="position:relative;flex-shrink:0">
         ${avatarHTML(p, 'md')}
+        ${unread > 0 ? `<div class="conv-avatar-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
+      </div>`;
+
+      return `<div class="conversation-item${unread > 0 ? ' unread-conv' : ''}" onclick="openDMWith('${uid}')" data-uid="${uid}">
+        ${avatarWithBadge}
         <div class="conv-info">
           <div class="conv-name-row">
             <div class="conv-name${unread > 0 ? ' conv-name-bold' : ''}">${escapeHTML(p.displayName || 'Member')}${verifiedBadge(p.verified)}</div>
-            ${ts ? `<div class="conv-time">${ts}</div>` : ''}
+            ${ts ? `<div class="conv-time${unread > 0 ? ' conv-time-unread' : ''}">${ts}</div>` : ''}
           </div>
           <div class="conv-preview-row">
             <div class="conv-preview${unread > 0 ? ' conv-preview-unread' : ''}">${escapeHTML(previewText)}</div>
-            ${unread > 0 ? `<div class="conv-unread-badge">${unread}</div>` : ''}
+            ${unread > 0 ? `<div class="conv-unread-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
           </div>
         </div>
       </div>`;
     }).filter(Boolean).join('');
+
   } catch (err) {
+    console.error('[Conversations]', err);
     container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load conversations</div></div>';
   }
 }
@@ -62,14 +105,13 @@ async function renderConversations() {
 let _typingUnsubscribe = null, _typingTimer = null;
 let _dmPartner = null;
 let _dmEmojiOpen = false;
+let _activeReplyMsg = null;
 
-// Emoji quick-picker list
-const DM_EMOJIS = ['❤️','😂','😮','😢','😡','👍','👎','🔥','🎉','💯','😍','🙏','💪','✅','😭','🤣','😁','🥳','👏','💀'];
-const QUICK_REACTIONS = ['❤️','😂','👍','😮','😢','😡'];
+const QUICK_REACTIONS = ['❤️', '😂', '👍', '😮', '😢', '😡'];
 
 async function openDMWith(uid) {
   if (msgUnsubscribe) { try { msgUnsubscribe(); } catch (e) {} msgUnsubscribe = null; }
-  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} } _typingUnsubscribe = null;
+  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} _typingUnsubscribe = null; }
 
   if (activePage !== 'messages') showPage('messages');
   activeConvUid = uid;
@@ -100,6 +142,7 @@ async function openDMWith(uid) {
     dmInput.onkeydown = function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDMText(uid); } };
     dmInput.oninput = function () { sendTypingIndicator(uid); updateSendBtn(); };
     dmInput.value = '';
+    updateSendBtn();
   }
 
   // Wire send btn
@@ -114,8 +157,8 @@ async function openDMWith(uid) {
   const emojiBtn = $('dmEmojiBtn');
   if (emojiBtn) emojiBtn.onclick = function (e) { e.stopPropagation(); toggleEmojiPicker(); };
 
-  // Close emoji picker when clicking outside
-  document.addEventListener('click', function closeEmoji(e) {
+  // Close emoji picker on outside click
+  document.addEventListener('click', function _closeEmoji(e) {
     const picker = $('dmEmojiPicker');
     if (picker && !picker.contains(e.target) && e.target.id !== 'dmEmojiBtn') {
       picker.style.display = 'none'; _dmEmojiOpen = false;
@@ -124,65 +167,58 @@ async function openDMWith(uid) {
 
   const convId = [currentUser.uid, uid].sort().join('_');
 
-  // Typing indicator listener
+  // Typing listener
   _typingUnsubscribe = window.XF.on('typing/' + convId + '/' + uid, function (tSnap) {
     const statusEl = $('dmOnlineStatus'); if (!statusEl) return;
     if (tSnap.exists() && tSnap.val() === true) {
       statusEl.innerHTML = '<span style="color:var(--success);font-size:0.78rem">● typing…</span>';
     } else {
-      statusEl.textContent = '@' + escapeHTML(_dmPartner?.handle || 'member'); statusEl.style.color = 'var(--text-dim)';
+      statusEl.textContent = '@' + escapeHTML(_dmPartner?.handle || 'member');
+      statusEl.style.color = 'var(--text-dim)';
     }
   });
 
-  // Real-time message listener using child_added — fires for every new message reliably
+  // ─── REAL-TIME MESSAGE LISTENER ───
+  // Uses child_added / child_changed / child_removed — never misses a message
   let _readDebounce = null;
-  const _msgs = {}; // local cache keyed by message id
+  const _msgs = {};
+
+  function _rerender() {
+    const msgEl = $('dmMessages');
+    if (!msgEl) return;
+    const sorted = Object.values(_msgs).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    if (sorted.length === 0) {
+      msgEl.innerHTML = '<div class="dm-empty-state">Say hello! 👋</div>';
+      return;
+    }
+    const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
+    try {
+      msgEl.innerHTML = renderMessagesHTML(sorted, uid, convId);
+    } catch (err) {
+      console.error('[DM render]', err);
+      return;
+    }
+    if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
+    clearTimeout(_readDebounce);
+    _readDebounce = setTimeout(function () {
+      if (activeConvUid === uid) markMessagesRead(convId);
+    }, 800);
+  }
 
   msgUnsubscribe = (function () {
     const ref = window.XF.db.ref('dms/' + convId);
+    const refLimited = ref.limitToLast(100);
 
-    function rerender() {
-      const msgEl = $('dmMessages');
-      if (!msgEl) return;
-      const sorted = Object.values(_msgs).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      if (sorted.length === 0) {
-        msgEl.innerHTML = '<div class="dm-empty-state">Say hello! 👋</div>';
-        return;
-      }
-      const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
-      try {
-        msgEl.innerHTML = renderMessagesHTML(sorted, uid, convId);
-      } catch (err) {
-        console.error('[DM] render error:', err);
-        return;
-      }
-      if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
-      clearTimeout(_readDebounce);
-      _readDebounce = setTimeout(function () {
-        if (activeConvUid === uid) markMessagesRead(convId);
-      }, 800);
-    }
+    const onAdd = function (snap) { _msgs[snap.key] = { id: snap.key, ...snap.val() }; _rerender(); };
+    const onChange = function (snap) { _msgs[snap.key] = { id: snap.key, ...snap.val() }; _rerender(); };
+    const onRemove = function (snap) { delete _msgs[snap.key]; _rerender(); };
 
-    // child_added fires for each existing message on load, then for every new one
-    const onAdd = ref.limitToLast(100).on('child_added', function (snap) {
-      _msgs[snap.key] = { id: snap.key, ...snap.val() };
-      rerender();
-    });
-
-    // child_changed fires when readBy, reactions, etc. update
-    const onChange = ref.on('child_changed', function (snap) {
-      _msgs[snap.key] = { id: snap.key, ...snap.val() };
-      rerender();
-    });
-
-    // child_removed fires when a message is deleted
-    const onRemove = ref.on('child_removed', function (snap) {
-      delete _msgs[snap.key];
-      rerender();
-    });
+    refLimited.on('child_added', onAdd);
+    ref.on('child_changed', onChange);
+    ref.on('child_removed', onRemove);
 
     return function () {
-      ref.off('child_added', onAdd);
+      refLimited.off('child_added', onAdd);
       ref.off('child_changed', onChange);
       ref.off('child_removed', onRemove);
     };
@@ -200,22 +236,24 @@ function renderMessagesHTML(msgs, uid, convId) {
     const isMe = m.senderUid === currentUser.uid;
 
     // Date separator
-    const msgDate = m.createdAt ? new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : '';
+    const msgDate = m.createdAt
+      ? new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+      : '';
     if (msgDate && msgDate !== lastDate) {
       html += `<div class="dm-date-sep"><span>${msgDate}</span></div>`;
       lastDate = msgDate;
     }
 
-    // Starred indicator
     const isStarred = m.starred && m.starred[currentUser.uid];
 
-    // Reactions row
+    // Reactions
     let reactionsHTML = '';
     if (m.reactions && Object.keys(m.reactions).length > 0) {
       const counts = {};
       Object.values(m.reactions).forEach(r => { counts[r] = (counts[r] || 0) + 1; });
       reactionsHTML = `<div class="dm-reactions">${Object.entries(counts).map(([emoji, count]) =>
-        `<span class="dm-reaction-pill${m.reactions[currentUser.uid] === emoji ? ' mine' : ''}" onclick="toggleReaction('${convId}','${m.id}','${emoji}')">${emoji}${count > 1 ? ' ' + count : ''}</span>`
+        `<span class="dm-reaction-pill${m.reactions[currentUser.uid] === emoji ? ' mine' : ''}"
+          onclick="toggleReaction('${convId}','${m.id}','${emoji}')">${emoji}${count > 1 ? ' ' + count : ''}</span>`
       ).join('')}</div>`;
     }
 
@@ -228,19 +266,21 @@ function renderMessagesHTML(msgs, uid, convId) {
       </div>`;
     }
 
-    // Message content
+    // Content
     let contentHTML = '';
     if (m.imageUrl) contentHTML += `<img src="${escapeHTML(m.imageUrl)}" loading="lazy" onclick="openLightbox('${escapeHTML(m.imageUrl)}')" alt="photo" class="dm-msg-image">`;
     if (m.text) contentHTML += `<span class="dm-msg-text">${escapeHTML(m.text)}</span>`;
 
-    // Read ticks
+    // Read ticks (sender only)
     let statusHTML = '';
     if (isMe) {
       const isRead = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
       statusHTML = `<span class="msg-tick${isRead ? ' read' : ' sent'}" title="${isRead ? 'Read' : 'Sent'}">✓✓</span>`;
     }
 
-    const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const timeStr = m.createdAt
+      ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '';
 
     html += `<div class="chat-msg-wrap${isMe ? ' me' : ' them'}" id="msg-${m.id}"
       data-msgid="${m.id}" data-convid="${convId}" data-sender="${isMe ? 'me' : 'them'}"
@@ -249,7 +289,7 @@ function renderMessagesHTML(msgs, uid, convId) {
       ${!isMe ? `<div class="chat-msg-avatar">${avatarHTML(_dmPartner, 'sm')}</div>` : ''}
       <div class="chat-msg-col">
         ${replyHTML}
-        <div class="chat-msg${isMe ? ' me' : ' them'}">
+        <div class="chat-msg${isMe ? ' me' : ' them'}${isStarred ? ' starred' : ''}">
           ${isStarred ? '<span class="dm-star-badge" title="Starred">⭐</span>' : ''}
           ${contentHTML}
           <div class="dm-msg-footer">
@@ -282,22 +322,21 @@ function insertEmoji(emoji) {
   input.focus();
   input.selectionStart = input.selectionEnd = pos + emoji.length;
   updateSendBtn();
-  const picker = $('dmEmojiPicker'); if (picker) { picker.style.display = 'none'; _dmEmojiOpen = false; }
+  const picker = $('dmEmojiPicker');
+  if (picker) { picker.style.display = 'none'; _dmEmojiOpen = false; }
 }
 
 function updateSendBtn() {
   const input = $('dmInput'), btn = document.querySelector('.dm-send-btn');
   if (!btn) return;
-  const hasText = input?.value?.trim().length > 0;
-  const hasImg = $('dmImgPreview')?.innerHTML?.trim().length > 0;
-  btn.style.opacity = (hasText || hasImg) ? '1' : '0.5';
+  const hasContent = (input?.value?.trim().length > 0) || ($('dmImgPreview')?.innerHTML?.trim().length > 0);
+  btn.style.opacity = hasContent ? '1' : '0.5';
 }
 
 /* ══════════════════════════════════════════════
-   MESSAGE CONTEXT MENU (long-press / right-click)
+   MESSAGE CONTEXT MENU
 ══════════════════════════════════════════════ */
 let _msgHoldTimer = null;
-let _activeReplyMsg = null;
 
 function startMsgHold(e, el) { _msgHoldTimer = setTimeout(function () { showMsgMenu(e, el); }, 500); }
 function cancelMsgHold() { clearTimeout(_msgHoldTimer); }
@@ -311,20 +350,25 @@ function showMsgMenu(e, el) {
 
   const menu = document.createElement('div');
   menu.className = 'msg-ctx-menu';
-
-  // Quick reactions
-  menu.innerHTML = `<div class="msg-ctx-reactions">${QUICK_REACTIONS.map(emoji =>
-    `<span class="msg-ctx-reaction" onclick="toggleReaction('${convId}','${msgId}','${emoji}')">${emoji}</span>`
-  ).join('')}</div>
-  <div class="msg-ctx-item" onclick="replyToMsg('${convId}','${msgId}')">↩ Reply</div>
-  <div class="msg-ctx-item" onclick="starMsg('${convId}','${msgId}')">⭐ Star</div>
-  <div class="msg-ctx-item" onclick="copyMsgText('${msgId}')">📋 Copy</div>
-  <div class="msg-ctx-item" onclick="forwardMsg('${convId}','${msgId}')">↗ Forward</div>
-  ${isMe ? `<div class="msg-ctx-item delete" onclick="deleteDMMessage('${convId}','${msgId}')">🗑 Delete</div>` : ''}`;
+  menu.innerHTML = `
+    <div class="msg-ctx-reactions">
+      ${QUICK_REACTIONS.map(emoji =>
+        `<span class="msg-ctx-reaction" onclick="toggleReaction('${convId}','${msgId}','${emoji}')">${emoji}</span>`
+      ).join('')}
+    </div>
+    <div class="msg-ctx-item" onclick="replyToMsg('${convId}','${msgId}')">↩ Reply</div>
+    <div class="msg-ctx-item" onclick="starMsg('${convId}','${msgId}')">⭐ Star</div>
+    <div class="msg-ctx-item" onclick="copyMsgText('${msgId}')">📋 Copy</div>
+    ${isMe ? `<div class="msg-ctx-item delete" onclick="deleteDMMessage('${convId}','${msgId}')">🗑 Delete</div>` : ''}`;
 
   const rect = el.getBoundingClientRect();
-  menu.style.cssText = `position:fixed;top:${Math.min(rect.bottom + 4, window.innerHeight - 180)}px;${rect.left > window.innerWidth / 2 ? 'right:' + (window.innerWidth - rect.right) + 'px' : 'left:' + Math.max(8, rect.left) + 'px'};z-index:9999`;
+  const top = Math.min(rect.bottom + 4, window.innerHeight - 200);
+  const left = rect.left > window.innerWidth / 2
+    ? (window.innerWidth - rect.right) + 'px'
+    : Math.max(8, rect.left) + 'px';
+  menu.style.cssText = `position:fixed;top:${top}px;${rect.left > window.innerWidth / 2 ? 'right:' + left : 'left:' + left};z-index:9999`;
   document.body.appendChild(menu);
+
   setTimeout(function () {
     document.addEventListener('click', function h() { menu.remove(); document.removeEventListener('click', h); }, { once: true });
   }, 50);
@@ -352,12 +396,18 @@ async function replyToMsg(convId, msgId) {
     const snap = await window.XF.get('dms/' + convId + '/' + msgId);
     if (!snap.exists()) return;
     const msg = snap.val();
-    _activeReplyMsg = { id: msgId, text: msg.text || '', imageUrl: msg.imageUrl || '', senderName: msg.senderUid === currentUser.uid ? 'You' : (_dmPartner?.displayName || 'Member') };
+    _activeReplyMsg = {
+      id: msgId,
+      text: msg.text || '',
+      imageUrl: msg.imageUrl || '',
+      senderName: msg.senderUid === currentUser.uid ? 'You' : (_dmPartner?.displayName || 'Member')
+    };
     const bar = $('dmReplyBar');
     if (bar) {
       bar.style.display = 'flex';
       const preview = bar.querySelector('.dm-reply-preview');
-      if (preview) preview.innerHTML = `<strong>${escapeHTML(_activeReplyMsg.senderName)}</strong><br><span>${_activeReplyMsg.imageUrl ? '📷 Photo' : escapeHTML(_activeReplyMsg.text.slice(0, 60))}</span>`;
+      if (preview) preview.innerHTML = `<strong>${escapeHTML(_activeReplyMsg.senderName)}</strong><br>
+        <span>${_activeReplyMsg.imageUrl ? '📷 Photo' : escapeHTML(_activeReplyMsg.text.slice(0, 60))}</span>`;
     }
     $('dmInput')?.focus();
   } catch (e) {}
@@ -384,13 +434,7 @@ async function copyMsgText(msgId) {
   if (!el) return;
   const textEl = el.querySelector('.dm-msg-text');
   const text = textEl ? textEl.textContent : '';
-  if (text) { navigator.clipboard?.writeText(text).then(() => showToast('Copied!')).catch(() => showToast('Copy failed')); }
-}
-
-async function forwardMsg(convId, msgId) {
-  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
-  showToast('Forward: select a conversation to forward to');
-  // Simple implementation: show toast — full forward UI would need a contact picker
+  if (text) navigator.clipboard?.writeText(text).then(() => showToast('Copied!')).catch(() => showToast('Copy failed'));
 }
 
 async function deleteDMMessage(convId, msgId) {
@@ -401,11 +445,15 @@ async function deleteDMMessage(convId, msgId) {
 
 function scrollToMsg(msgId) {
   const el = document.getElementById('msg-' + msgId);
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('dm-msg-highlight'); setTimeout(() => el.classList.remove('dm-msg-highlight'), 1500); }
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('dm-msg-highlight');
+    setTimeout(() => el.classList.remove('dm-msg-highlight'), 1500);
+  }
 }
 
 /* ══════════════════════════════════════════════
-   SEND MESSAGE
+   SEND TEXT MESSAGE
 ══════════════════════════════════════════════ */
 function sendTypingIndicator(uid) {
   if (!currentUser || !uid) return;
@@ -429,29 +477,10 @@ async function markMessagesRead(convId) {
         updates['dms/' + convId + '/' + c.key + '/readBy/' + currentUser.uid] = true;
       }
     });
-    if (Object.keys(updates).length > 0) { await window.XF.multiUpdate(updates); refreshMsgBadge(); }
-  } catch (e) {}
-}
-
-async function refreshMsgBadge() {
-  if (!currentUser) return;
-  try {
-    const connSnap = await window.XF.get('connections/' + currentUser.uid);
-    if (!connSnap.exists()) return;
-    const uids = Object.keys(connSnap.val());
-    let total = 0;
-    await Promise.all(uids.map(async uid => {
-      const convId = [currentUser.uid, uid].sort().join('_');
-      const dmSnap = await window.XF.get('dms/' + convId); if (!dmSnap.exists()) return;
-      dmSnap.forEach(c => {
-        const m = c.val();
-        if (m.senderUid !== currentUser.uid && (!m.readBy || !m.readBy[currentUser.uid])) total++;
-      });
-    }));
-    ['navMsgBadge', 'mobileMsgBadge'].forEach(id => {
-      const b = $(id); if (!b) return;
-      b.textContent = total; b.style.display = total > 0 ? 'flex' : 'none';
-    });
+    if (Object.keys(updates).length > 0) {
+      await window.XF.multiUpdate(updates);
+      refreshMsgBadge(); // defined in notifications.js
+    }
   } catch (e) {}
 }
 
@@ -462,15 +491,18 @@ async function sendDMText(uid) {
   const text = input?.value?.trim();
   if (!text) return;
 
-  if (input) input.value = '';
+  input.value = '';
   updateSendBtn();
+
   const convId = [currentUser.uid, uid].sort().join('_');
   window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
   clearTimeout(_typingTimer);
 
-  // Use Date.now() — ServerValue.TIMESTAMP is async and breaks orderByChild listeners
   const msgData = {
-    senderUid: currentUser.uid, text, createdAt: Date.now(), readBy: { [currentUser.uid]: true }
+    senderUid: currentUser.uid,
+    text: text,
+    createdAt: Date.now(), // Date.now() not ServerValue.TIMESTAMP — keeps listener working
+    readBy: { [currentUser.uid]: true }
   };
   if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
 
@@ -479,14 +511,22 @@ async function sendDMText(uid) {
     notifyDMRecipient(uid, text);
     refreshMsgBadge();
   } catch (err) {
-    if (input) input.value = text;
+    input.value = text;
+    updateSendBtn();
     showToast('Failed to send — check your connection');
   }
 }
 
 async function notifyDMRecipient(toUid, preview) {
   try {
-    await window.XF.push('notifications/' + toUid, { type: 'new_message', fromUid: currentUser.uid, fromName: currentProfile?.displayName || 'Member', preview: (preview || '').slice(0, 40), createdAt: window.XF.ts(), read: false });
+    await window.XF.push('notifications/' + toUid, {
+      type: 'new_message',
+      fromUid: currentUser.uid,
+      fromName: currentProfile?.displayName || 'Member',
+      preview: (preview || '').slice(0, 40),
+      createdAt: Date.now(), // fixed: was window.XF.ts()
+      read: false
+    });
   } catch (e) {}
 }
 
@@ -499,9 +539,11 @@ function handleDMImagePreview(inputEl, uid) {
   if (preview) {
     const reader = new FileReader();
     reader.onload = function (e) {
-      preview.innerHTML = `<div class="img-preview-wrap" style="margin:6px 0 0 4px"><img src="${e.target.result}" style="max-width:120px;max-height:120px;border-radius:8px"><div class="img-preview-remove" onclick="cancelDMImage()">✕</div></div>`;
+      preview.innerHTML = `<div class="img-preview-wrap" style="margin:6px 0 0 4px">
+        <img src="${e.target.result}" style="max-width:120px;max-height:120px;border-radius:8px">
+        <div class="img-preview-remove" onclick="cancelDMImage()">✕</div>
+      </div>`;
       updateSendBtn();
-      // Auto-send image when selected
       sendDMImage(inputEl, uid);
     };
     reader.readAsDataURL(inputEl.files[0]);
@@ -519,12 +561,17 @@ function cancelDMImage() {
 async function sendDMImage(inputEl, uid) {
   uid = uid || activeConvUid;
   if (!uid || !currentUser || !inputEl?.files?.[0]) return;
-  const file = inputEl.files[0];
   showToast('Uploading image…');
   try {
-    const r = await window.XCloud.upload(file, 'dm_images');
+    const r = await window.XCloud.upload(inputEl.files[0], 'dm_images');
     const convId = [currentUser.uid, uid].sort().join('_');
-    const msgData = { senderUid: currentUser.uid, imageUrl: r.url, text: '', createdAt: Date.now(), readBy: { [currentUser.uid]: true } };
+    const msgData = {
+      senderUid: currentUser.uid,
+      imageUrl: r.url,
+      text: '',
+      createdAt: Date.now(),
+      readBy: { [currentUser.uid]: true }
+    };
     if (_activeReplyMsg) { msgData.replyTo = _activeReplyMsg; cancelReply(); }
     await window.XF.push('dms/' + convId, msgData);
     inputEl.value = '';
@@ -533,7 +580,7 @@ async function sendDMImage(inputEl, uid) {
     notifyDMRecipient(uid, '📷 Photo');
     refreshMsgBadge();
   } catch (e) {
-    showToast('Failed to send image — check your connection');
+    showToast('Failed to send image');
   }
 }
 
@@ -542,14 +589,15 @@ async function sendDMImage(inputEl, uid) {
 ══════════════════════════════════════════════ */
 function closeDMFullpage() {
   if (msgUnsubscribe) { try { msgUnsubscribe(); } catch (e) {} msgUnsubscribe = null; }
-  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} } _typingUnsubscribe = null;
+  if (_typingUnsubscribe) { try { _typingUnsubscribe(); } catch (e) {} _typingUnsubscribe = null; }
   if (_typingTimer) { clearTimeout(_typingTimer); _typingTimer = null; }
   if (currentUser && activeConvUid) {
     const convId = [currentUser.uid, activeConvUid].sort().join('_');
     window.XF.set('typing/' + convId + '/' + currentUser.uid, false).catch(() => {});
   }
   cancelReply();
-  activeConvUid = null; _dmPartner = null;
+  activeConvUid = null;
+  _dmPartner = null;
   const lv = $('messagesListView'), dp = $('dmFullpage');
   if (dp) dp.style.display = 'none';
   if (lv) lv.style.display = 'block';

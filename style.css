@@ -2358,3 +2358,60 @@ body.theme-light .chat-msg.me {
 
 /* Unread conv time — accent color */
 .conv-time-unread { color: var(--accent) !important; font-weight: 600; }
+
+/* ══════════════════════════════════════════════
+   IN-APP MESSAGE POPUP (v7)
+══════════════════════════════════════════════ */
+.msg-popup {
+  position: fixed;
+  top: 16px; left: 50%; transform: translateX(-50%) translateY(-120px);
+  width: calc(100% - 32px); max-width: 420px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 9999;
+  cursor: pointer;
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.35s;
+  opacity: 0;
+}
+.msg-popup.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+.msg-popup-avatar { flex-shrink: 0; }
+.msg-popup-body { flex: 1; min-width: 0; }
+.msg-popup-name { font-weight: 700; font-size: 0.88rem; color: var(--text); }
+.msg-popup-preview { font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.msg-popup-close { color: var(--text-dim); font-size: 0.85rem; padding: 4px; flex-shrink: 0; }
+
+/* ══════════════════════════════════════════════
+   NOTIFICATION TOOLBAR (v7)
+══════════════════════════════════════════════ */
+.notif-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-toolbar-count { font-size: 0.78rem; color: var(--text-dim); }
+.notif-mark-all-btn {
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--accent); background: none; border: none;
+  cursor: pointer; padding: 4px 10px;
+  border-radius: 9999px;
+  transition: background 0.15s;
+}
+.notif-mark-all-btn:hover { background: var(--accent-dim); }
+.notif-mark-all-btn:disabled { opacity: 0.5; }
+
+.notif-section-header {
+  padding: 8px 16px 6px;
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.notif-section-header.unread-header { color: var(--accent); }
+.notif-section-header.read-header { color: var(--text-dim); }
