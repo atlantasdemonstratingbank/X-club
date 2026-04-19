@@ -247,7 +247,7 @@ let _msgWatchers = []; // cleanup handles
 
 async function startMsgWatch() {
   if (!currentUser) return;
-  // Watch my connections list — re-setup watchers when connections change
+  // Watch my connections list — re-setup per-conversation watchers when it changes
   window.XF.on('connections/' + currentUser.uid, async connSnap => {
     // Tear down previous conversation watchers
     _msgWatchers.forEach(off => { try { off(); } catch (e) {} });
@@ -258,14 +258,20 @@ async function startMsgWatch() {
     const uids = Object.keys(connSnap.val());
     uids.forEach(uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
-      const ref = window.XF.db.ref('dms/' + convId);
+      const dmPath = 'dms/' + convId;
 
-      // Use child_added so we only react to new messages, not full reloads
-      const handler = async snap => {
+      // Timestamp guard — child_added replays ALL existing children on first
+      // attach. We record the time we started listening and skip anything older,
+      // so only genuinely new messages trigger popups/badge/preview updates.
+      const watchStarted = Date.now();
+
+      const addedHandler = async snap => {
         const m = snap.val();
         if (!m) return;
 
-        // Recalculate total unread badge
+        const isNew = (m.createdAt || 0) >= watchStarted;
+
+        // Always refresh badge (covers unread count for existing msgs too on re-attach)
         refreshMsgBadge();
 
         // Refresh conv list preview if on messages page
@@ -274,8 +280,9 @@ async function startMsgWatch() {
           renderConversations();
         }
 
-        // Show popup only for incoming unread messages when NOT in that chat
-        if (activeConvUid !== uid &&
+        // Only show popup for genuinely new incoming messages
+        if (isNew &&
+            activeConvUid !== uid &&
             m.senderUid !== currentUser.uid &&
             (!m.readBy || !m.readBy[currentUser.uid])) {
           try {
@@ -286,15 +293,15 @@ async function startMsgWatch() {
         }
       };
 
-      ref.on('child_added', handler);
-      // Also watch child_changed for read receipts updating the badge
-      const changeHandler = () => refreshMsgBadge();
-      ref.on('child_changed', changeHandler);
+      // child_changed handles read-receipt updates → badge recalc
+      const changedHandler = () => refreshMsgBadge();
 
-      _msgWatchers.push(() => {
-        ref.off('child_added', handler);
-        ref.off('child_changed', changeHandler);
-      });
+      // Use XF.onChild so listeners are registered in the stable registry
+      // and unsub functions actually work
+      const unsubAdded   = window.XF.onChild(dmPath, 'child_added',   addedHandler);
+      const unsubChanged = window.XF.onChild(dmPath, 'child_changed', changedHandler);
+
+      _msgWatchers.push(() => { unsubAdded(); unsubChanged(); });
     });
 
     refreshMsgBadge();

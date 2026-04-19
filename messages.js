@@ -49,7 +49,7 @@ async function renderConversations() {
     await Promise.all(uids.map(async uid => {
       const convId = [currentUser.uid, uid].sort().join('_');
       try {
-        const dmSnap = await window.XF.db.ref('dms/' + convId).once('value');
+        const dmSnap = await window.XF.get('dms/' + convId);
         if (!dmSnap.exists()) {
           convData[uid] = { latest: null, unread: 0, ts: 0 };
           return;
@@ -240,10 +240,18 @@ function _dmWireComposer(uid) {
 }
 
 function _dmStartListeners(uid, convId) {
-  const ref = window.XF.db.ref('dms/' + convId);
+  const dmPath  = 'dms/' + convId;
+  const typPath = 'typing/' + convId + '/' + uid;
 
-  // Load last 100 messages via child_added (fires for existing + new)
-  const refLast = ref.limitToLast(100);
+  // ── Message listeners ────────────────────────────────────────────────────
+  // child_added fires for the last 100 existing messages on attach AND every
+  // new message after that. We must use XF.onChild (stable ref registry) so
+  // that the unsub functions actually remove the correct listeners.
+  // NOTE: child_added with limitToLast goes through XF.db directly because
+  // it needs a query (not a plain path), so we manage it manually here but
+  // store both the ref and handler so cleanup is correct.
+  const dmRef     = window.XF.db.ref(dmPath).limitToLast(100);
+  const dmRefFull = window.XF.db.ref(dmPath); // for changed/removed (no limit)
 
   const onAdd = snap => {
     _dmMsgCache[snap.key] = { id: snap.key, ...snap.val() };
@@ -258,18 +266,18 @@ function _dmStartListeners(uid, convId) {
     _dmRender(uid, convId);
   };
 
-  refLast.on('child_added', onAdd);
-  ref.on('child_changed', onChange);
-  ref.on('child_removed', onRemove);
+  dmRef.on('child_added',   onAdd);
+  dmRefFull.on('child_changed', onChange);
+  dmRefFull.on('child_removed', onRemove);
 
+  // Cleanup: off() called on the SAME ref objects that on() used
   _dmMsgOff = () => {
-    refLast.off('child_added', onAdd);
-    ref.off('child_changed', onChange);
-    ref.off('child_removed', onRemove);
+    dmRef.off('child_added',       onAdd);
+    dmRefFull.off('child_changed', onChange);
+    dmRefFull.off('child_removed', onRemove);
   };
 
-  // Typing indicator
-  const typRef = window.XF.db.ref('typing/' + convId + '/' + uid);
+  // ── Typing indicator ─────────────────────────────────────────────────────
   const onType = snap => {
     const st = $('dmStatus'); if (!st) return;
     if (snap.val() === true) {
@@ -278,8 +286,8 @@ function _dmStartListeners(uid, convId) {
       st.textContent = '@' + escapeHTML(_dmPartner?.handle || '');
     }
   };
-  typRef.on('value', onType);
-  _dmTypingOff = () => typRef.off('value', onType);
+  // Use XF.on (stable ref + registry) for the typing path
+  _dmTypingOff = window.XF.on(typPath, onType);
 }
 
 /* ─── RENDER MESSAGES ─── */
