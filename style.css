@@ -2092,3 +2092,191 @@ body.theme-light .admin-user-meta { color: var(--text-dim); }
 }
 .msg-ctx-item:hover { background: var(--bg-hover); }
 .msg-ctx-item.delete { color: var(--danger, #f4212e); }
+
+/* ══════════════════════════════════════════════
+   WHATSAPP-STYLE MESSAGING ENHANCEMENTS (v7)
+══════════════════════════════════════════════ */
+
+/* Sender bubble — blue/accent (right side) */
+.chat-msg.me {
+  background: linear-gradient(135deg, #1d9bf0, #1a8cd8);
+  color: #fff;
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 1px 4px rgba(29,155,240,0.3);
+}
+
+/* Receiver bubble — dark grey (left side) */
+.chat-msg.them {
+  background: #1e2a38;
+  color: #e7e9ea;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+body.theme-light .chat-msg.them {
+  background: #e9f0f7;
+  color: #0f1923;
+}
+
+body.theme-light .chat-msg.me {
+  background: linear-gradient(135deg, #1d9bf0, #1565c0);
+  color: #fff;
+}
+
+/* Message image */
+.dm-msg-image {
+  max-width: 220px; max-height: 220px;
+  border-radius: 12px; display: block;
+  cursor: pointer; object-fit: cover;
+  margin-bottom: 4px;
+}
+
+/* Message text */
+.dm-msg-text { display: block; line-height: 1.45; word-break: break-word; }
+
+/* Footer: time + ticks */
+.dm-msg-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 3px; margin-top: 4px;
+  font-size: 0.68rem; opacity: 0.75;
+}
+.dm-msg-time { white-space: nowrap; }
+.msg-tick.sent { color: rgba(255,255,255,0.7); }
+.msg-tick.read { color: #7dd3fc; }
+.chat-msg.them .msg-tick { color: var(--text-dim); }
+.chat-msg.them .msg-tick.read { color: #53bdeb; }
+
+/* Date separator */
+.dm-date-sep {
+  display: flex; align-items: center; justify-content: center;
+  margin: 12px 0 8px; gap: 10px;
+}
+.dm-date-sep span {
+  background: var(--bg-3); color: var(--text-dim);
+  font-size: 0.72rem; padding: 3px 12px; border-radius: 9999px;
+  border: 1px solid var(--border);
+}
+
+/* Empty DM state */
+.dm-empty-state {
+  text-align: center; color: var(--text-dim);
+  font-size: 0.9rem; margin-top: 40px; padding: 20px;
+}
+
+/* Reply bar */
+.dm-reply-bar {
+  display: none; align-items: center; gap: 8px;
+  padding: 8px 14px; background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+.dm-reply-preview { flex: 1; font-size: 0.82rem; color: var(--text-dim); }
+.dm-reply-preview strong { color: var(--accent); display: block; font-size: 0.78rem; }
+.dm-reply-cancel {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--bg-3); color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 0.8rem; flex-shrink: 0;
+  border: none;
+}
+
+/* Reply reference inside message */
+.dm-reply-ref {
+  background: rgba(255,255,255,0.1); border-radius: 8px;
+  padding: 6px 10px; margin-bottom: 6px;
+  border-left: 3px solid rgba(255,255,255,0.5);
+  cursor: pointer; font-size: 0.78rem;
+}
+.chat-msg.them .dm-reply-ref {
+  background: rgba(0,0,0,0.12);
+  border-left-color: var(--accent);
+}
+.dm-reply-ref-name { font-weight: 700; margin-bottom: 2px; opacity: 0.9; }
+.dm-reply-ref-text { opacity: 0.75; }
+
+/* Star badge on message */
+.dm-star-badge { font-size: 0.75rem; position: absolute; top: -6px; right: -6px; }
+.chat-msg-col { position: relative; }
+
+/* Reactions */
+.dm-reactions {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+.dm-reaction-pill {
+  background: var(--bg-3); border: 1px solid var(--border);
+  border-radius: 9999px; padding: 2px 8px; font-size: 0.8rem;
+  cursor: pointer; transition: all 0.15s; user-select: none;
+}
+.dm-reaction-pill.mine { background: var(--accent-dim); border-color: var(--accent); }
+.dm-reaction-pill:hover { transform: scale(1.1); }
+
+/* Context menu */
+.msg-ctx-menu {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5); min-width: 180px;
+  z-index: 9999;
+}
+.msg-ctx-reactions {
+  display: flex; gap: 4px; padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.msg-ctx-reaction {
+  font-size: 1.3rem; cursor: pointer; padding: 2px 4px;
+  border-radius: 6px; transition: transform 0.1s;
+}
+.msg-ctx-reaction:hover { transform: scale(1.25); background: var(--bg-3); }
+.msg-ctx-item {
+  padding: 11px 14px; font-size: 0.88rem; cursor: pointer;
+  color: var(--text); transition: background 0.1s;
+}
+.msg-ctx-item:hover { background: var(--bg-hover); }
+.msg-ctx-item.delete { color: var(--danger); }
+
+/* Message highlight (after scrollToMsg) */
+.dm-msg-highlight .chat-msg {
+  animation: msgFlash 1.5s ease;
+}
+@keyframes msgFlash {
+  0%,100% { filter: brightness(1); }
+  30%,70% { filter: brightness(1.4); }
+}
+
+/* Emoji picker */
+.dm-emoji-picker {
+  display: none; flex-wrap: wrap; gap: 4px;
+  position: absolute; bottom: 60px; left: 14px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px;
+  width: 260px; max-height: 160px; overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 500;
+}
+.dm-emoji-item {
+  font-size: 1.3rem; cursor: pointer; padding: 4px;
+  border-radius: 6px; transition: transform 0.1s;
+  user-select: none;
+}
+.dm-emoji-item:hover { transform: scale(1.2); background: var(--bg-3); }
+
+/* Emoji trigger button */
+.dm-emoji-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+  font-size: 1.2rem; background: none; border: none;
+  transition: color 0.15s;
+}
+.dm-emoji-btn:hover { color: var(--accent); }
+
+/* DM composer wrapper (relative for emoji picker) */
+.dm-composer-wrap { position: relative; }
+
+/* Message send btn disabled state */
+.dm-send-btn { transition: opacity 0.2s, background 0.2s; }
+
+/* Typing indicator in DM */
+.dm-typing-wrap {
+  padding: 4px 16px 8px;
+  font-size: 0.78rem; color: var(--success);
+  min-height: 22px;
+}
