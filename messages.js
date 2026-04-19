@@ -134,26 +134,31 @@ async function openDMWith(uid) {
     }
   });
 
-  // Real-time message listener
-  let _readDebounce = null, _rendering = false;
+  // Real-time message listener — no _rendering guard (it blocks updates)
+  let _readDebounce = null;
   msgUnsubscribe = (function () {
     const ref = window.XF.db.ref('dms/' + convId).orderByChild('createdAt').limitToLast(100);
     const handler = function (msgSnap) {
-      if (_rendering) return; _rendering = true;
       const msgEl = $('dmMessages');
-      if (!msgEl) { _rendering = false; return; }
+      if (!msgEl) return;
       const msgs = [];
       if (msgSnap.exists()) msgSnap.forEach(c => msgs.push({ id: c.key, ...c.val() }));
       if (msgs.length === 0) {
         msgEl.innerHTML = '<div class="dm-empty-state">Say hello! 👋</div>';
-        _rendering = false; return;
+        return;
       }
-      const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 100;
-      msgEl.innerHTML = renderMessagesHTML(msgs, uid, convId);
+      const wasAtBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120;
+      try {
+        msgEl.innerHTML = renderMessagesHTML(msgs, uid, convId);
+      } catch (err) {
+        console.error('[DM] render error:', err);
+        return;
+      }
       if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
-      _rendering = false;
       clearTimeout(_readDebounce);
-      _readDebounce = setTimeout(function () { if (activeConvUid === uid) markMessagesRead(convId); }, 800);
+      _readDebounce = setTimeout(function () {
+        if (activeConvUid === uid) markMessagesRead(convId);
+      }, 800);
     };
     ref.on('value', handler);
     return function () { ref.off('value', handler); };
