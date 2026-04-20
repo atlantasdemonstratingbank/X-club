@@ -71,14 +71,6 @@ function _dmTeardown() {
   _dmEmojiOpen = false;
   cancelReply();
 }
-    window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
-  }
-  _dmMsgCache.clear();
-  _dmPartner   = null;
-  _dmReplyMsg  = null;
-  _dmEmojiOpen = false;
-  cancelReply();
-}
 
 function closeDMFullpage() {
   _dmTeardown();
