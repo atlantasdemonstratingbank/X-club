@@ -498,7 +498,7 @@
         <div class="admin-content">
           <div id="adminTabUsers">
             <div class="admin-section-title">⌕ <span>Manage Members</span></div>
-            <input class="form-input" type="text" placeholder="Search users by name or handle…" oninput="adminSearchUsers(this.value)" style="margin-bottom:16px;border-radius:9999px;background:var(--bg-3)">
+            <input class="form-input admin-search" type="text" placeholder="Search users by name or handle…" oninput="adminSearchUsers(this.value)">
             <div id="adminUserList"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
           <div id="adminTabPosts" style="display:none">
@@ -514,6 +514,7 @@
               <div class="admin-stat-card"><div class="admin-stat-num" id="statTotalUsers">—</div><div class="admin-stat-label">Total Members</div></div>
               <div class="admin-stat-card"><div class="admin-stat-num" id="statVerified">—</div><div class="admin-stat-label">Verified</div></div>
               <div class="admin-stat-card"><div class="admin-stat-num" id="statPosts">—</div><div class="admin-stat-label">Total Posts</div></div>
+              <div class="admin-stat-card"><div class="admin-stat-num" id="statUnreadMsgs">—</div><div class="admin-stat-label">Unread Messages</div></div>
             </div>
           </div>
         </div>
