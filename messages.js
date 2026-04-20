@@ -16,6 +16,7 @@
 
 let _dmPartner    = null;
 let _dmTypingOff  = null;
+let _dmPresenceOff = null;
 let _dmTypingTimer = null;
 let _dmMsgOff     = null;
 let _dmReplyMsg   = null;
@@ -50,14 +51,26 @@ async function openDMWith(uid) {
 
   const convId = [currentUser.uid, uid].sort().join('_');
   _dmStartListeners(uid, convId);
+
+  // Mark messages as delivered when we open a chat
+  _markDelivered(convId);
 }
 
 function _dmTeardown() {
-  if (_dmMsgOff)    { try { _dmMsgOff(); }    catch(e){} _dmMsgOff    = null; }
-  if (_dmTypingOff) { try { _dmTypingOff(); } catch(e){} _dmTypingOff = null; }
-  if (_dmTypingTimer) { clearTimeout(_dmTypingTimer); _dmTypingTimer = null; }
+  if (_dmMsgOff)       { try { _dmMsgOff(); }       catch(e){} _dmMsgOff       = null; }
+  if (_dmTypingOff)    { try { _dmTypingOff(); }    catch(e){} _dmTypingOff    = null; }
+  if (_dmPresenceOff)  { try { _dmPresenceOff(); }  catch(e){} _dmPresenceOff  = null; }
+  if (_dmTypingTimer)  { clearTimeout(_dmTypingTimer); _dmTypingTimer = null; }
   if (currentUser && activeConvUid) {
     const cid = [currentUser.uid, activeConvUid].sort().join('_');
+    window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
+  }
+  _dmMsgCache.clear();
+  _dmPartner   = null;
+  _dmReplyMsg  = null;
+  _dmEmojiOpen = false;
+  cancelReply();
+}
     window.XF.db.ref('typing/' + cid + '/' + currentUser.uid).set(false).catch(()=>{});
   }
   _dmMsgCache.clear();
@@ -90,9 +103,45 @@ function _dmRenderHeader(uid) {
       ${avatarHTML(_dmPartner, 'md')}
       <div>
         <div class="dm-header-name">${escapeHTML(_dmPartner?.displayName || 'Member')}${verifiedBadge(_dmPartner?.verified)}</div>
-        <div class="dm-header-status" id="dmStatus">@${escapeHTML(_dmPartner?.handle || '')}</div>
+        <div class="dm-header-status" id="dmStatus"><span style="color:var(--text-dim);font-size:0.78rem">@${escapeHTML(_dmPartner?.handle || '')}</span></div>
       </div>
     </div>`;
+}
+
+/* Format last seen — today at HH:MM / yesterday at HH:MM / 19 March 25 at 7:17 */
+function _fmtLastSeen(ts) {
+  if (!ts) return '';
+  const now = new Date(), d = new Date(ts);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diffMins = Math.floor((Date.now() - ts) / 60000);
+  if (diffMins < 2) return 'last seen just now';
+  if (ts >= todayStart)
+    return 'last seen today at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (ts >= todayStart - 86400000)
+    return 'last seen yesterday at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return 'last seen ' + d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: '2-digit' }) +
+    ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/* Update status line — presence and typing are independent, typing wins */
+let _dmPartnerPresence = null;
+let _dmPartnerTyping   = false;
+
+function _updateDmStatus(presence, typing) {
+  const st = $('dmStatus'); if (!st) return;
+  if (typing) {
+    st.innerHTML = '<span style="color:#00c853;font-size:0.78rem">● typing…</span>';
+    return;
+  }
+  if (!presence) {
+    st.innerHTML = `<span style="color:var(--text-dim);font-size:0.78rem">@${escapeHTML(_dmPartner?.handle || '')}</span>`;
+    return;
+  }
+  if (presence.online) {
+    st.innerHTML = '<span style="color:#00c853;font-size:0.78rem">● Online</span>';
+  } else {
+    st.innerHTML = `<span style="color:var(--text-dim);font-size:0.78rem">${escapeHTML(_fmtLastSeen(presence.lastSeen))}</span>`;
+  }
 }
 
 function _dmWireComposer(uid) {
@@ -130,10 +179,13 @@ function _dmWireComposer(uid) {
    All three update _dmMsgCache then debounce a re-render.
 ═══════════════════════════════════════════════════════════════════════════ */
 function _dmStartListeners(uid, convId) {
-  const dmPath  = 'dms/' + convId;
-  const typPath = 'typing/' + convId + '/' + uid;
+  const dmPath   = 'dms/' + convId;
+  const typPath  = 'typing/' + convId + '/' + uid;
+  const presPath = 'presence/' + uid;
 
-  // Query ref for last 100 — separate object from the full ref
+  _dmPartnerPresence = null;
+  _dmPartnerTyping   = false;
+
   const dmQuery   = window.XF.db.ref(dmPath).limitToLast(100);
   const dmRefFull = window.XF.db.ref(dmPath);
 
@@ -150,24 +202,29 @@ function _dmStartListeners(uid, convId) {
     _dmRender(uid, convId);
   };
 
-  dmQuery.on('child_added',        onAdded);
-  dmRefFull.on('child_changed',   onChanged);
-  dmRefFull.on('child_removed',   onRemoved);
+  dmQuery.on('child_added',     onAdded);
+  dmRefFull.on('child_changed', onChanged);
+  dmRefFull.on('child_removed', onRemoved);
 
   _dmMsgOff = () => {
-    dmQuery.off('child_added',      onAdded);
+    dmQuery.off('child_added',     onAdded);
     dmRefFull.off('child_changed', onChanged);
     dmRefFull.off('child_removed', onRemoved);
   };
 
-  // Typing indicator via XF.on (stable ref)
+  // Typing — layers on top of presence, doesn't replace it
   const onType = snap => {
-    const st = $('dmStatus'); if (!st) return;
-    st.innerHTML = snap.val() === true
-      ? '<span style="color:#00c853;font-size:0.78rem">● typing…</span>'
-      : escapeHTML('@' + (_dmPartner?.handle || ''));
+    _dmPartnerTyping = snap.val() === true;
+    _updateDmStatus(_dmPartnerPresence, _dmPartnerTyping);
   };
   _dmTypingOff = window.XF.on(typPath, onType);
+
+  // Presence — online / last seen
+  const onPresence = snap => {
+    _dmPartnerPresence = snap.exists() ? snap.val() : null;
+    _updateDmStatus(_dmPartnerPresence, _dmPartnerTyping);
+  };
+  _dmPresenceOff = window.XF.on(presPath, onPresence);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -231,8 +288,12 @@ function _buildMsgsHTML(msgs, uid, convId) {
 
     // Meta
     const t      = m.createdAt > 0 ? new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-    const isRead = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
-    const ticks  = isMe ? `<span class="dm-ticks${isRead?' read':''}" title="${isRead?'Read':'Sent'}">✓✓</span>` : '';
+    const isDelivered = m.deliveredTo && m.deliveredTo[Object.keys(m.deliveredTo).find(k => k !== currentUser.uid)];
+    const isRead      = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
+    const tickClass   = isRead ? ' seen' : isDelivered ? ' delivered' : '';
+    const tickTitle   = isRead ? 'Seen' : isDelivered ? 'Delivered' : 'Sent';
+    const tickMark    = isRead || isDelivered ? '✓✓' : '✓';
+    const ticks       = isMe ? `<span class="dm-ticks${tickClass}" title="${tickTitle}">${tickMark}</span>` : '';
     const starred = m.starred?.[currentUser.uid] ? '<span class="dm-starred">⭐</span>' : '';
 
     // Reactions
@@ -412,6 +473,22 @@ async function _markRead(convId) {
       await window.XF.multiUpdate(updates);
       refreshMsgBadge();
     }
+  } catch(e) {}
+}
+
+/* Mark all messages in a conv as delivered to me (used when opening a chat) */
+async function _markDelivered(convId) {
+  if (!currentUser) return;
+  try {
+    const snap = await window.XF.get('dms/' + convId);
+    if (!snap.exists()) return;
+    const updates = {};
+    snap.forEach(c => {
+      const m = c.val();
+      if (m.senderUid !== currentUser.uid && (!m.deliveredTo || !m.deliveredTo[currentUser.uid]))
+        updates['dms/' + convId + '/' + c.key + '/deliveredTo/' + currentUser.uid] = true;
+    });
+    if (Object.keys(updates).length) await window.XF.multiUpdate(updates);
   } catch(e) {}
 }
 

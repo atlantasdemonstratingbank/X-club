@@ -2548,9 +2548,10 @@ body.theme-light .dm-bubble.me { background: linear-gradient(135deg,#1d9bf0,#156
   gap: 3px; margin-top: 3px;
 }
 .dm-time { font-size: 0.67rem; opacity: 0.72; white-space: nowrap; }
-.dm-ticks { font-size: 0.7rem; letter-spacing: -2px; opacity: 0.72; }
-.dm-ticks.read { color: #7dd3fc; opacity: 1; }
-.dm-bubble.them .dm-ticks.read { color: #53bdeb; }
+.dm-ticks { font-size: 0.7rem; letter-spacing: -2px; opacity: 0.72; color: var(--text-dim); }
+.dm-ticks.delivered { opacity: 1; color: var(--text-dim); }
+.dm-ticks.seen { color: #7dd3fc; opacity: 1; }
+.dm-bubble.them .dm-ticks.seen { color: #53bdeb; }
 
 /* Star */
 .dm-starred { font-size: 0.7rem; position: absolute; top: -6px; right: -4px; }

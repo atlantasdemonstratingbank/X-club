@@ -79,6 +79,7 @@ async function onAuthChange(user) {
     currentProfile = snap.exists() ? snap.val() : null;
     updateNavUser(); updateComposerAvatar(); loadSuggested(); startNotifWatch(); startMsgWatch();
     updateSidebarVerifyBtn(); _updateMsgRequestBadge();
+    _initPresence(user.uid);
     const handled = checkProfileDeepLink();
     if (!handled) {
       if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
@@ -203,4 +204,28 @@ function checkProfileDeepLink() {
 function updateSidebarVerifyBtn() {
   const btn = $('sidebarVerifyBtn'); if (!btn) return;
   btn.style.display = (currentUser && currentProfile?.verified) ? 'none' : 'block';
+}
+
+/* ══════════════════════════════════════════════
+   PRESENCE — online / last seen
+   Uses Firebase onDisconnect so "offline + lastSeen"
+   is written server-side even if the tab crashes.
+══════════════════════════════════════════════ */
+function _initPresence(uid) {
+  const presRef = window.XF.db.ref('presence/' + uid);
+  const connRef = window.XF.db.ref('.info/connected');
+
+  connRef.on('value', snap => {
+    if (!snap.val()) return; // not connected yet
+
+    // When we disconnect (tab close, network drop, signout) Firebase
+    // server writes offline + timestamp automatically
+    presRef.onDisconnect().set({
+      online: false,
+      lastSeen: window.XF.ts()
+    });
+
+    // Mark online now
+    presRef.set({ online: true, lastSeen: window.XF.ts() });
+  });
 }
