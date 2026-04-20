@@ -176,22 +176,17 @@ async function sendReset() {
 
 /* ══════════════════════════════════════════════
    PROFILE SHARING DEEP LINK  (?user=HANDLE or ?uid=UID)
-   Params are captured IMMEDIATELY on script load
-   before auth resolves, so they're never lost.
 ══════════════════════════════════════════════ */
-const _deepLinkParams = new URLSearchParams(window.location.search);
-const _deepLinkHandle = _deepLinkParams.get('user');
-const _deepLinkUid    = _deepLinkParams.get('uid');
-// Strip params from URL right away so the history stack stays clean
-if (_deepLinkHandle || _deepLinkUid) window.history.replaceState({}, '', window.location.pathname);
-
 function checkProfileDeepLink() {
-  const handle = _deepLinkHandle, uid = _deepLinkUid;
+  const params = new URLSearchParams(window.location.search);
+  const handle = params.get('user'); const uid = params.get('uid');
   if (!handle && !uid) return false;
+  window.history.replaceState({}, '', window.location.pathname);
   (async () => {
     try {
       let targetUid = uid;
       if (!targetUid && handle) {
+        // Use the handles/ index directly — no full user scan needed
         const snap = await window.XF.get('handles/' + handle.toLowerCase());
         targetUid = snap.exists() ? snap.val() : null;
       }

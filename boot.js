@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await window.XFire.load();
-    window.XF.onAuth(user => { clearTimeout(loaderFailsafe); onAuthChange(user).catch(err => { console.error('onAuthChange error:', err); hideLoader(); showPage('landing'); }); });
+    window.XF.onAuth(user => { clearTimeout(loaderFailsafe); onAuthChange(user); });
     setTimeout(loadBizFeed, 3000);
   } catch (err) {
     clearTimeout(loaderFailsafe);
