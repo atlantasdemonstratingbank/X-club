@@ -52,11 +52,15 @@ function _ref(path) {
 }
 
 // ── Listener registry — tracks every active listener for dedup + offAll ─────
-// key: `${path}::${event}::${cb identity}`
+// key: `${path}::${event}::${unique nonce}`
+// We use a counter nonce instead of cb.toString() because anonymous arrow
+// functions defined inside other functions have identical source text, which
+// causes the dedup guard to silently skip re-attaching after teardown.
 const _listeners = new Map();
+let _listenerSeq = 0;
 
-function _listenerKey(path, event, cb) {
-  return `${path}::${event}::${String(cb).slice(0, 80)}`;
+function _listenerKey(path, event) {
+  return `${path}::${event}::${++_listenerSeq}`;
 }
 
 // ── Write wrapper — surfaces failures to console without swallowing ──────────
@@ -115,7 +119,7 @@ async function loadFirebase() {
     // on the same ref object that on() used (via _refCache).
     // Duplicate calls with identical (path, cb) are silently ignored.
     on(path, cb) {
-      const key = _listenerKey(path, 'value', cb);
+      const key = _listenerKey(path, 'value');
       if (_listeners.has(key)) return _listeners.get(key).unsub;
 
       const r = _ref(path);
@@ -142,7 +146,7 @@ async function loadFirebase() {
     //     ...
     //   });
     onChild(path, event, cb) {
-      const key = _listenerKey(path, event, cb);
+      const key = _listenerKey(path, event);
       if (_listeners.has(key)) return _listeners.get(key).unsub;
 
       const r = _ref(path);

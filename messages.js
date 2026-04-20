@@ -52,8 +52,8 @@ async function openDMWith(uid) {
   const convId = [currentUser.uid, uid].sort().join('_');
   _dmStartListeners(uid, convId);
 
-  // Mark messages as delivered when we open a chat
-  _markDelivered(convId);
+  // Mark messages as delivered when we open a chat — called after cache loads
+  // _markDelivered is triggered from _dmDoRender once messages are in cache
 }
 
 function _dmTeardown() {
@@ -244,6 +244,7 @@ function _dmDoRender(uid, convId) {
   if (wasAtBottom) msgEl.scrollTop = msgEl.scrollHeight;
 
   setTimeout(() => { if (activeConvUid === uid) _markRead(convId); }, 800);
+  setTimeout(() => { if (activeConvUid === uid) _markDelivered(convId); }, 100);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -280,12 +281,11 @@ function _buildMsgsHTML(msgs, uid, convId) {
 
     // Meta
     const t      = m.createdAt > 0 ? new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-    const isDelivered = m.deliveredTo && m.deliveredTo[Object.keys(m.deliveredTo).find(k => k !== currentUser.uid)];
+    const isDelivered = m.deliveredTo && Object.keys(m.deliveredTo).some(k => k !== currentUser.uid);
     const isRead      = m.readBy && Object.keys(m.readBy).some(k => k !== currentUser.uid);
-    const tickClass   = isRead ? ' seen' : isDelivered ? ' delivered' : '';
-    const tickTitle   = isRead ? 'Seen' : isDelivered ? 'Delivered' : 'Sent';
-    const tickMark    = isRead || isDelivered ? '✓✓' : '✓';
-    const ticks       = isMe ? `<span class="dm-ticks${tickClass}" title="${tickTitle}">${tickMark}</span>` : '';
+    const tickLabel = isRead ? 'Seen' : isDelivered ? 'Delivered' : 'Sent';
+    const tickClass = isRead ? ' seen' : isDelivered ? ' delivered' : ' sent';
+    const ticks = isMe ? `<span class="dm-ticks${tickClass}">${tickLabel}</span>` : '';
     const starred = m.starred?.[currentUser.uid] ? '<span class="dm-starred">⭐</span>' : '';
 
     // Reactions
@@ -472,13 +472,10 @@ async function _markRead(convId) {
 async function _markDelivered(convId) {
   if (!currentUser) return;
   try {
-    const snap = await window.XF.get('dms/' + convId);
-    if (!snap.exists()) return;
     const updates = {};
-    snap.forEach(c => {
-      const m = c.val();
+    _dmMsgCache.forEach((m, key) => {
       if (m.senderUid !== currentUser.uid && (!m.deliveredTo || !m.deliveredTo[currentUser.uid]))
-        updates['dms/' + convId + '/' + c.key + '/deliveredTo/' + currentUser.uid] = true;
+        updates['dms/' + convId + '/' + key + '/deliveredTo/' + currentUser.uid] = true;
     });
     if (Object.keys(updates).length) await window.XF.multiUpdate(updates);
   } catch(e) {}

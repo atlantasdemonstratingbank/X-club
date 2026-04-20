@@ -213,19 +213,25 @@ function updateSidebarVerifyBtn() {
 ══════════════════════════════════════════════ */
 function _initPresence(uid) {
   const presRef = window.XF.db.ref('presence/' + uid);
-  const connRef = window.XF.db.ref('.info/connected');
 
-  connRef.on('value', snap => {
-    if (!snap.val()) return; // not connected yet
+  // Write online immediately — don't wait for .info/connected which can be
+  // unreliable depending on SDK init timing
+  presRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP })
+    .catch(e => console.error('[Presence] write failed:', e));
 
-    // When we disconnect (tab close, network drop, signout) Firebase
-    // server writes offline + timestamp automatically
-    presRef.onDisconnect().set({
+  // onDisconnect is what makes last seen work — registered separately
+  presRef.onDisconnect().update({
+    online: false,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP
+  });
+
+  // Re-register onDisconnect whenever connection is restored (handles reconnects)
+  window.XF.db.ref('.info/connected').on('value', snap => {
+    if (!snap.val()) return;
+    presRef.onDisconnect().update({
       online: false,
-      lastSeen: window.XF.ts()
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
     });
-
-    // Mark online now
-    presRef.set({ online: true, lastSeen: window.XF.ts() });
+    presRef.update({ online: true });
   });
 }
