@@ -82,7 +82,13 @@ async function onAuthChange(user) {
     _initPresence(user.uid);
     const handled = checkProfileDeepLink();
     if (!handled) {
-      if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
+      // Check if user just logged in and was redirected from a profile link
+      if (window._pendingProfileUid) {
+        const pendingUid = window._pendingProfileUid;
+        window._pendingProfileUid = null;
+        if (pendingUid === user.uid) showPage('profile');
+        else setTimeout(() => showPage('user-profile', { uid: pendingUid }), 400);
+      } else if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
       else showPage(activePage);
     }
     setTimeout(loadBizFeed, 1500); setTimeout(runScheduledPosts, 5000);
@@ -186,14 +192,20 @@ function checkProfileDeepLink() {
     try {
       let targetUid = uid;
       if (!targetUid && handle) {
-        // Use the handles/ index directly — no full user scan needed
         const snap = await window.XF.get('handles/' + handle.toLowerCase());
         targetUid = snap.exists() ? snap.val() : null;
       }
-      if (!targetUid) { showToast('Profile not found'); return; }
+      if (!targetUid) { showToast('Profile not found'); showPage(currentUser ? 'feed' : 'landing'); return; }
       if (currentUser && targetUid === currentUser.uid) { showPage('profile'); return; }
+      if (!currentUser) {
+        // Not logged in — store the target and show login/landing
+        // After login, onAuthChange will handle navigation normally
+        window._pendingProfileUid = targetUid;
+        showPage('landing');
+        return;
+      }
       showPage('user-profile', { uid: targetUid });
-    } catch (e) { showToast('Could not load profile'); }
+    } catch (e) { showToast('Could not load profile'); showPage(currentUser ? 'feed' : 'landing'); }
   })();
   return true;
 }

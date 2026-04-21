@@ -7,11 +7,13 @@
 function switchAdminTab(tab, el) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); el.classList.add('active');
   $('adminTabUsers').style.display    = tab === 'users'    ? 'block' : 'none';
+  $('adminTabFeed').style.display     = tab === 'feed'     ? 'block' : 'none';
   $('adminTabPosts').style.display    = tab === 'posts'    ? 'block' : 'none';
   $('adminTabStats').style.display    = tab === 'stats'    ? 'block' : 'none';
   $('adminTabSettings').style.display = tab === 'settings' ? 'block' : 'none';
   if (tab === 'stats')    { loadAdminStats(); loadScheduledPostsAdmin(); }
   if (tab === 'posts')    { adminLoadPosts(); }
+  if (tab === 'feed')     { adminLoadFeed(); }
   if (tab === 'settings') { loadAdminSettings(); }
 }
 
@@ -25,19 +27,28 @@ async function loadAdminUsers() {
     const snap = await window.XF.get('users'); allUsersCache = [];
     if (snap.exists()) snap.forEach(c => { const v = c.val(); if (v && typeof v === 'object') allUsersCache.push({ id: c.key, uid: v.uid || c.key, ...v }); });
     allUsersCache.sort((a, b) => (b.joinedAt || 0) - (a.joinedAt || 0));
+
+    // Count total unread messages across all conversations for each user
     const unreadMap = {};
-    await Promise.all(allUsersCache.map(async u => {
-      try {
-        const dmsSnap = await window.XF.get('dms');
-        if (!dmsSnap.exists()) return;
-        let count = 0;
+    try {
+      const dmsSnap = await window.XF.get('dms');
+      if (dmsSnap.exists()) {
         dmsSnap.forEach(conv => {
-          if (!conv.key.includes(u.uid)) return;
-          conv.forEach(msg => { const m = msg.val(); if (m.senderUid !== u.uid && (!m.readBy || !m.readBy[u.uid])) count++; });
+          const convKey = conv.key; // e.g. "uid1_uid2"
+          const parts = convKey.split('_');
+          parts.forEach(uid => {
+            if (!allUsersCache.find(u => u.uid === uid)) return;
+            let count = 0;
+            conv.forEach(msg => {
+              const m = msg.val();
+              if (m && m.senderUid !== uid && (!m.readBy || !m.readBy[uid])) count++;
+            });
+            if (count > 0) unreadMap[uid] = (unreadMap[uid] || 0) + count;
+          });
         });
-        if (count > 0) unreadMap[u.uid] = count;
-      } catch (e) {}
-    }));
+      }
+    } catch (e) {}
+
     renderAdminUsers(allUsersCache, unreadMap);
     const ce = $('adminUserCount'); if (ce) ce.textContent = allUsersCache.length + ' members';
   } catch (err) { container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load users</div></div>'; }
@@ -48,18 +59,37 @@ function renderAdminUsers(users, unreadMap = {}) {
   if (users.length === 0) { container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">No users found</div></div>'; return; }
   container.innerHTML = users.map(u => {
     const unread = unreadMap[u.uid] || 0;
+    const unreadBadge = unread > 0
+      ? `<span class="admin-unread-badge" title="${unread} unread message${unread > 1 ? 's' : ''}">✉ ${unread > 99 ? '99+' : unread}</span>`
+      : '';
     return `
     <div class="admin-user-card" id="adminCard-${u.uid}">
       ${avatarHTML(u, 'md')}
       <div class="admin-user-info">
-        <div class="admin-user-name">${escapeHTML(u.displayName || 'Member')} ${u.verified ? '<span style="color:var(--accent);font-size:0.8rem">✓ Verified</span>' : '<span style="color:var(--text-muted);font-size:0.8rem">Unverified</span>'}${unread > 0 ? `<span style="background:var(--accent);color:#fff;font-size:0.7rem;padding:1px 7px;border-radius:9999px;margin-left:6px">${unread} unread msg${unread > 1 ? 's' : ''}</span>` : ''}</div>
+        <div class="admin-user-name">
+          ${escapeHTML(u.displayName || 'Member')}
+          ${u.verified ? '<span class="admin-badge-verified">✓ Verified</span>' : '<span class="admin-badge-unverified">Unverified</span>'}
+          ${unreadBadge}
+        </div>
         <div class="admin-user-meta">@${escapeHTML(u.handle || '?')} · ${escapeHTML(u.email || '')} · ${formatCount(u.followersCount || 0)} followers</div>
       </div>
       <div class="admin-user-actions">
-        <input class="admin-followers-input" id="flwInput-${u.uid}" type="number" value="${u.followersCount || 0}" min="0" placeholder="Followers">
-        <button class="btn btn-accent btn-sm" onclick="adminSetFollowers('${u.uid}')">Set</button>
-        ${u.verified ? `<button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="adminToggleVerify('${u.uid}',false)">Unverify</button>` : `<button class="btn btn-sm" style="background:var(--success);color:#fff" onclick="adminToggleVerify('${u.uid}',true)">Verify</button>`}
-        <button class="btn btn-sm btn-danger" onclick="adminDeleteUser('${u.uid}')">Delete</button>
+        <div class="admin-action-group">
+          <label class="admin-action-label">Followers</label>
+          <div class="admin-action-row">
+            <input class="admin-followers-input" id="flwInput-${u.uid}" type="number" value="${u.followersCount || 0}" min="0" placeholder="0">
+            <button class="btn btn-accent btn-sm" onclick="adminSetFollowers('${u.uid}')">Set</button>
+          </div>
+        </div>
+        <div class="admin-action-group">
+          <label class="admin-action-label">Status</label>
+          <div class="admin-action-row">
+            ${u.verified
+              ? `<button class="btn btn-sm admin-btn-danger" onclick="adminToggleVerify('${u.uid}',false)">Unverify</button>`
+              : `<button class="btn btn-sm admin-btn-success" onclick="adminToggleVerify('${u.uid}',true)">Verify</button>`}
+            <button class="btn btn-sm btn-danger" onclick="adminDeleteUser('${u.uid}')">Delete</button>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -277,14 +307,26 @@ async function adminLoadPosts() {
       return `<div style="padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;font-size:0.83rem">
         <div style="font-weight:600;margin-bottom:4px;color:var(--text-dim)">@${escapeHTML(p.handle || p.authorUid || '?')} · ${timeAgo(p.createdAt)}</div>
         <div style="margin-bottom:8px;color:var(--text)">${escapeHTML((p.text || '').slice(0, 80))}${(p.text || '').length > 80 ? '…' : ''}</div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="color:var(--text-dim);font-size:0.8rem">❤ ${likeCount} likes</span>
           <input id="likeEdit-${p.id}" type="number" value="${likeCount}" min="0" style="width:70px;padding:4px 8px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.8rem;outline:none">
           <button class="btn btn-accent btn-sm" style="font-size:0.75rem;padding:4px 10px" onclick="adminSetLikes('${p.id}')">Set Likes</button>
+          <button class="btn btn-sm admin-btn-danger" style="font-size:0.75rem;padding:4px 10px;margin-left:auto" onclick="adminDeletePost('${p.id}',this)">Delete Post</button>
         </div>
       </div>`;
     }).join('');
   } catch (e) { container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Could not load posts</div>'; }
+}
+
+async function adminDeletePost(postId, btn) {
+  if (!confirm('Delete this post? This cannot be undone.')) return;
+  try {
+    btn.disabled = true; btn.textContent = 'Deleting…';
+    await window.XF.remove('posts/' + postId);
+    await window.XF.remove('comments/' + postId);
+    showToast('Post deleted');
+    adminLoadPosts();
+  } catch (e) { showToast('Failed to delete post'); btn.disabled = false; btn.textContent = 'Delete Post'; }
 }
 
 async function adminSetLikes(postId) {
@@ -302,5 +344,121 @@ async function adminSetLikes(postId) {
     for (let i = 0; i < toAdd; i++) updates['posts/' + postId + '/likes/' + fakeBase + i] = true;
     await window.XF.multiUpdate(updates);
     showToast('Likes updated to ' + newCount); adminLoadPosts();
+  } catch (e) { showToast('Failed to update likes'); }
+}
+
+/* ══════════════════════════════════════════════
+   ADMIN: ALL USERS FEED (see posts like a regular user)
+   Admin can delete any post and adjust likes +/-
+══════════════════════════════════════════════ */
+let _adminFeedPosts = [];
+
+async function adminLoadFeed() {
+  const container = $('adminFeedList'); if (!container) return;
+  container.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  try {
+    const snap = await window.XF.get('posts');
+    if (!snap.exists()) { container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">No posts yet</div></div>'; return; }
+    _adminFeedPosts = [];
+    snap.forEach(c => _adminFeedPosts.push({ id: c.key, ...c.val() }));
+    _adminFeedPosts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    // Load author profiles
+    const uids = [...new Set(_adminFeedPosts.map(p => p.authorUid).filter(u => u && u !== CLAUDE_ENGINEER_UID))];
+    const profiles = {};
+    await Promise.allSettled(uids.map(async uid => {
+      try { const s = await window.XF.get('users/' + uid); if (s.exists()) profiles[uid] = s.val(); } catch (e) {}
+    }));
+
+    renderAdminFeed(_adminFeedPosts, profiles);
+  } catch (e) { container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Could not load posts</div></div>'; }
+}
+
+function renderAdminFeed(posts, profiles) {
+  const container = $('adminFeedList'); if (!container) return;
+  if (!posts.length) { container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">No posts</div></div>'; return; }
+  container.innerHTML = posts.slice(0, 50).map(p => {
+    const author = p.authorUid === CLAUDE_ENGINEER_UID
+      ? { displayName: 'Claude Engineer', handle: 'claudeengineer', verified: true }
+      : (profiles[p.authorUid] || { displayName: 'Unknown', handle: '?' });
+    const likeCount = p.likes ? Object.keys(p.likes).length : 0;
+    const commentCount = p.commentCount || 0;
+    const mediaHTML = p.imageURL ? `<img src="${p.imageURL}" style="width:100%;border-radius:var(--radius-sm);margin-top:10px;max-height:360px;object-fit:cover" loading="lazy">` : '';
+    return `
+    <div class="admin-feed-post" id="adminFeedPost-${p.id}">
+      <div class="admin-feed-post-header">
+        ${avatarHTML(author, 'md')}
+        <div class="admin-feed-post-author">
+          <span class="admin-feed-post-name">${escapeHTML(author.displayName || 'Member')}${author.verified ? verifiedBadge(true) : ''}</span>
+          <span class="admin-feed-post-meta">@${escapeHTML(author.handle || '?')} · ${timeAgo(p.createdAt)}</span>
+        </div>
+        <button class="admin-feed-delete-btn" onclick="adminFeedDeletePost('${p.id}')" title="Delete post">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Delete
+        </button>
+      </div>
+      <div class="admin-feed-post-text">${escapeHTML(p.text || '')}</div>
+      ${mediaHTML}
+      <div class="admin-feed-post-actions">
+        <span class="admin-feed-like-count" id="adminLikeCount-${p.id}">❤ ${formatCount(likeCount)}</span>
+        <button class="admin-feed-like-btn" onclick="adminFeedAdjustLikes('${p.id}', 1)" title="Increase likes">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          +1 Like
+        </button>
+        <button class="admin-feed-like-btn admin-feed-like-btn--minus" onclick="adminFeedAdjustLikes('${p.id}', -1)" title="Decrease likes" ${likeCount === 0 ? 'disabled' : ''}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          −1 Like
+        </button>
+        <span style="color:var(--text-dim);font-size:0.8rem;margin-left:auto">💬 ${commentCount}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function adminFeedDeletePost(postId) {
+  if (!confirm('Delete this post permanently?')) return;
+  try {
+    await window.XF.remove('posts/' + postId);
+    await window.XF.remove('comments/' + postId);
+    const el = $('adminFeedPost-' + postId);
+    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }
+    showToast('Post deleted');
+  } catch (e) { showToast('Failed to delete post'); }
+}
+
+async function adminFeedAdjustLikes(postId, delta) {
+  try {
+    const snap = await window.XF.get('posts/' + postId + '/likes');
+    const existing = snap.exists() ? snap.val() : {};
+    const fakeBase = '_fake_like_';
+    const realKeys = Object.keys(existing).filter(k => !k.startsWith(fakeBase));
+    const fakeKeys = Object.keys(existing).filter(k => k.startsWith(fakeBase));
+    const currentCount = Object.keys(existing).length;
+    const newCount = Math.max(0, currentCount + delta);
+    const updates = {};
+
+    if (delta > 0) {
+      // Add a fake like
+      const newIdx = fakeKeys.length;
+      updates['posts/' + postId + '/likes/' + fakeBase + newIdx] = true;
+    } else if (delta < 0 && currentCount > 0) {
+      // Remove a fake like if any, else remove nothing (never remove real likes)
+      if (fakeKeys.length > 0) {
+        updates['posts/' + postId + '/likes/' + fakeKeys[fakeKeys.length - 1]] = null;
+      } else if (realKeys.length > 0) {
+        // Optional: allow removing a real like if no fakes left
+        updates['posts/' + postId + '/likes/' + realKeys[realKeys.length - 1]] = null;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) return;
+    await window.XF.multiUpdate(updates);
+
+    // Update UI
+    const countEl = $('adminLikeCount-' + postId);
+    if (countEl) countEl.textContent = '❤ ' + formatCount(newCount);
+    // Update minus button disabled state
+    const minusBtn = countEl?.closest('.admin-feed-post-actions')?.querySelector('.admin-feed-like-btn--minus');
+    if (minusBtn) minusBtn.disabled = newCount === 0;
   } catch (e) { showToast('Failed to update likes'); }
 }

@@ -456,18 +456,24 @@ function makeProfilePhotosClickable(containerEl, profile) {
 function shareProfile() {
   if (!currentProfile) return;
   const handle = currentProfile.handle || currentUser?.uid;
-  const url = window.location.origin + window.location.pathname + '?user=' + encodeURIComponent(handle);
+  // /u/handle goes through the Vercel serverless function which serves
+  // full Open Graph meta tags so WhatsApp / iMessage / Discord show a
+  // rich preview card (photo, followers, bio, "Follow X →" CTA).
+  const url = window.location.origin + '/u/' + encodeURIComponent(handle);
+  const text = 'Follow ' + (currentProfile.displayName || 'me') + ' on X-Musk Financial Club';
   if (navigator.share) {
-    navigator.share({ title: currentProfile.displayName + ' — X-Musk Financial Club', text: 'Check out ' + currentProfile.displayName + ' on X-Musk Financial Club', url }).catch(() => {});
+    navigator.share({ title: currentProfile.displayName + ' — X-Musk Financial Club', text, url }).catch(() => {});
   } else {
     navigator.clipboard?.writeText(url).then(() => showToast('Profile link copied!')).catch(() => showToast('Link: ' + url));
   }
 }
 
 function shareUserProfile(uid, displayName, handle) {
-  const url = window.location.origin + window.location.pathname + '?user=' + encodeURIComponent(handle || uid);
+  const slug = handle || uid;
+  const url  = window.location.origin + '/u/' + encodeURIComponent(slug);
+  const text = 'Follow ' + (displayName || 'this member') + ' on X-Musk Financial Club';
   if (navigator.share) {
-    navigator.share({ title: (displayName || 'Member') + ' — X-Musk Financial Club', text: 'Check out ' + (displayName || 'Member') + ' on X-Musk Financial Club', url }).catch(() => {});
+    navigator.share({ title: (displayName || 'Member') + ' — X-Musk Financial Club', text, url }).catch(() => {});
   } else {
     navigator.clipboard?.writeText(url).then(() => showToast('Profile link copied!')).catch(() => showToast('Link: ' + url));
   }
