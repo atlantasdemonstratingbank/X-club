@@ -48,7 +48,7 @@ async function handleGoogleAuth() {
 }
 
 async function handleLogout() {
-  await window.XF.signOut(); currentProfile = null; currentUser = null; showPage('landing');
+  await window.XF.signOut(); window.location.href = "/index.html";
 }
 
 function friendlyError(code) {
