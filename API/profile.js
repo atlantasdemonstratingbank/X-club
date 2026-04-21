@@ -3,9 +3,7 @@
 // When WhatsApp / iMessage / Twitter / Discord scrapes the URL, they hit
 // this endpoint and get a proper preview card instead of a blank page.
 //
-// URL pattern:  /api/profile?user=HANDLE
-// The share link in profile.js should point to /api/profile?user=HANDLE
-// (or keep using index.html?user=HANDLE — see vercel.json rewrites below)
+// URL pattern:  /api/profile?user=HANDLE  (or /u/HANDLE via vercel.json rewrite)
 
 const https = require('https');
 
@@ -29,6 +27,28 @@ function fbGet(path) {
   });
 }
 
+// Proxy a remote image through this function so crawlers (WhatsApp, Facebook,
+// Discord) can fetch it — they often block Firebase Storage URLs directly.
+function proxyImage(req, res) {
+  const imgUrl = req.query.__img;
+  if (!imgUrl) { res.statusCode = 400; res.end(); return; }
+  try {
+    const parsed = new URL(imgUrl);
+    const allowed = ['firebasestorage.googleapis.com', 'lh3.googleusercontent.com'];
+    if (!allowed.some(h => parsed.hostname.endsWith(h))) {
+      res.statusCode = 403; res.end(); return;
+    }
+    https.get(imgUrl, imgRes => {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', imgRes.headers['content-type'] || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      imgRes.pipe(res);
+    }).on('error', () => { res.statusCode = 502; res.end(); });
+  } catch (e) {
+    res.statusCode = 400; res.end();
+  }
+}
+
 function formatCount(n) {
   if (!n || isNaN(n)) return '0';
   n = Number(n);
@@ -45,9 +65,24 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// FIX: use pure Node http style throughout — mixing res.setHeader() with
+// res.status().send() (Express style) crashes Vercel serverless functions.
+function sendHtml(res, html) {
+  const buf = Buffer.from(html, 'utf8');
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': buf.length,
+    'Cache-Control': 'public, max-age=300, stale-while-revalidate=60',
+  });
+  res.end(buf);
+}
+
 module.exports = async (req, res) => {
-  const handle = (req.query.user || '').toLowerCase().trim();
-  const uidParam = (req.query.uid || '').trim();
+  // ── Image proxy mode ─────────────────────────────────────────────────────
+  if (req.query.__img) { proxyImage(req, res); return; }
+
+  const handle   = (req.query.user || '').toLowerCase().trim();
+  const uidParam = (req.query.uid  || '').trim();
 
   // ── Resolve UID from handle ──────────────────────────────────────────────
   let uid = uidParam;
@@ -63,7 +98,6 @@ module.exports = async (req, res) => {
 
   // ── Fallback if user not found ───────────────────────────────────────────
   if (!profile || typeof profile !== 'object') {
-    // Redirect to the main app — user doesn't exist
     res.writeHead(302, { Location: SITE_URL });
     res.end();
     return;
@@ -71,7 +105,6 @@ module.exports = async (req, res) => {
 
   const displayName  = escapeHtml(profile.displayName || 'Member');
   const userHandle   = escapeHtml(profile.handle || handle || '');
-  const bio          = escapeHtml(profile.bio || SITE_TAGLINE);
   const photoURL     = profile.photoURL || '';
   const followers    = formatCount(profile.followersCount || 0);
   const following    = formatCount(profile.followingCount || 0);
@@ -81,15 +114,16 @@ module.exports = async (req, res) => {
   // The link the user will actually open in the browser
   const profileAppURL = `${SITE_URL}/index.html?user=${encodeURIComponent(userHandle || uid)}`;
 
-  // OG image: use the user's photo if available, else a branded fallback
-  const ogImage = photoURL || `${SITE_URL}/og-default.png`;
+  // FIX: ogImage was defined but NEVER used in the OG meta tags (template used
+  // bare photoURL directly, so users without a photo got no og:image at all).
+  // Now always set — avatar is proxied so crawlers can actually fetch it.
+  const ogImage = photoURL
+    ? `${SITE_URL}/api/profile?__img=${encodeURIComponent(photoURL)}`
+    : `${SITE_URL}/og-default.png`;
 
   const title       = `${displayName}${verifiedMark} — ${SITE_NAME}`;
-  const description = `${followers} followers · ${following} following${bio ? ' · ' + profile.bio.slice(0, 100) : ''} · Follow ${profile.displayName || 'them'} on ${SITE_NAME}`;
+  const description = `${followers} followers · ${following} following${profile.bio ? ' · ' + profile.bio.slice(0, 100) : ''} · Follow ${profile.displayName || 'them'} on ${SITE_NAME}`;
 
-  // ── Build the HTML redirect page with full OG tags ───────────────────────
-  // The page auto-redirects to the SPA after a short delay.
-  // Crawlers/bots only see the OG meta (they don't execute JS redirects).
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,22 +135,22 @@ module.exports = async (req, res) => {
   <meta name="description" content="${escapeHtml(description)}">
 
   <!-- ── Open Graph (Facebook, WhatsApp, iMessage, LinkedIn, Discord) ── -->
-  <meta property="og:type"        content="profile">
-  <meta property="og:site_name"   content="${escapeHtml(SITE_NAME)}">
-  <meta property="og:url"         content="${escapeHtml(profileAppURL)}">
-  <meta property="og:title"       content="${escapeHtml(title)}">
-  <meta property="og:description" content="${escapeHtml(description)}">
-  ${photoURL ? `<meta property="og:image" content="${escapeHtml(photoURL)}">
+  <meta property="og:type"         content="profile">
+  <meta property="og:site_name"    content="${escapeHtml(SITE_NAME)}">
+  <meta property="og:url"          content="${escapeHtml(profileAppURL)}">
+  <meta property="og:title"        content="${escapeHtml(title)}">
+  <meta property="og:description"  content="${escapeHtml(description)}">
+  <meta property="og:image"        content="${escapeHtml(ogImage)}">
   <meta property="og:image:width"  content="400">
-  <meta property="og:image:height" content="400">` : ''}
+  <meta property="og:image:height" content="400">
   <meta property="profile:username" content="${escapeHtml(userHandle)}">
 
   <!-- ── Twitter / X Card ── -->
-  <meta name="twitter:card"        content="${photoURL ? 'summary_large_image' : 'summary'}">
+  <meta name="twitter:card"        content="summary">
   <meta name="twitter:site"        content="@XMuskClub">
   <meta name="twitter:title"       content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
-  ${photoURL ? `<meta name="twitter:image" content="${escapeHtml(photoURL)}">` : ''}
+  <meta name="twitter:image"       content="${escapeHtml(ogImage)}">
 
   <!-- ── Redirect to the SPA (bots won't follow this) ── -->
   <meta http-equiv="refresh" content="0;url=${escapeHtml(profileAppURL)}">
@@ -167,8 +201,5 @@ module.exports = async (req, res) => {
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  // Cache for 5 minutes — long enough for crawlers, short enough for updates
-  res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
-  res.status(200).send(html);
+  sendHtml(res, html);
 };
