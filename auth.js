@@ -83,9 +83,13 @@ async function onAuthChange(user) {
     const handled = checkProfileDeepLink();
     if (!handled) {
       // Check if user just logged in and was redirected from a profile link
+      if (!window._pendingProfileUid) {
+        try { window._pendingProfileUid = sessionStorage.getItem('_pendingProfileUid') || null; } catch (e) {}
+      }
       if (window._pendingProfileUid) {
         const pendingUid = window._pendingProfileUid;
         window._pendingProfileUid = null;
+        try { sessionStorage.removeItem('_pendingProfileUid'); } catch (e) {}
         if (pendingUid === user.uid) showPage('profile');
         else setTimeout(() => showPage('user-profile', { uid: pendingUid }), 400);
       } else if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
@@ -198,9 +202,10 @@ function checkProfileDeepLink() {
       if (!targetUid) { showToast('Profile not found'); showPage(currentUser ? 'feed' : 'landing'); return; }
       if (currentUser && targetUid === currentUser.uid) { showPage('profile'); return; }
       if (!currentUser) {
-        // Not logged in — store the target and show login/landing
-        // After login, onAuthChange will handle navigation normally
+        // Not logged in — persist target to sessionStorage so it survives
+        // the login flow (window._pendingProfileUid is lost on page reload)
         window._pendingProfileUid = targetUid;
+        try { sessionStorage.setItem('_pendingProfileUid', targetUid); } catch (e) {}
         showPage('landing');
         return;
       }
