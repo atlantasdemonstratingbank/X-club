@@ -1,66 +1,51 @@
-// router.js — X Club v7 — SPA Page Routing & Back Stack
+// router.js — X Club — Multi-Page Navigation
 // Load order: 3rd (after config.js, utils.js)
 'use strict';
 
-/* ══════════════════════════════════════════════
-   PAGE ROUTING  (proper SPA back stack)
-══════════════════════════════════════════════ */
-const _pageStack = [];
-let _suppressPopstate = false;
+/* Page-to-file map */
+const PAGE_MAP = {
+  landing:      '/index.html',
+  login:        '/login.html',
+  register:     '/register.html',
+  reset:        '/reset.html',
+  feed:         '/feed.html',
+  discover:     '/discover.html',
+  notifications:'/notifications.html',
+  messages:     '/messages.html',
+  profile:      '/profile.html',
+  'user-profile': '/user-profile.html',
+  'post-detail':  '/post-detail.html',
+  admin:        '/admin.html',
+};
 
 function showPage(name, opts = {}) {
   if (name === 'feed' && !currentUser) name = 'landing';
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const pg = $('page-' + name); if (pg) pg.classList.add('active');
-  activePage = name; updateNavActive(); window.scrollTo(0, 0);
-  if (name === 'feed') renderFeed();
-  else _teardownFeed();
-  if (name === 'discover') renderDiscover();
-  if (name === 'notifications') renderNotifications();
-  if (name === 'messages') renderConversations();
-  if (name === 'profile') renderOwnProfile();
-  if (name === 'user-profile') renderUserProfile(opts.uid);
-  if (name === 'post-detail') renderPostDetail(opts.postId);
-  if (!['landing', 'login', 'register', 'reset'].includes(name)) {
-    const top = _pageStack[_pageStack.length - 1];
-    const isDuplicate = top && top.name === name && JSON.stringify(top.opts) === JSON.stringify(opts);
-    if (!isDuplicate) {
-      _pageStack.push({ name, opts });
-      _suppressPopstate = true;
-      window.history.pushState({ page: name, opts }, '', window.location.pathname);
-      _suppressPopstate = false;
-    }
-  }
+  const file = PAGE_MAP[name];
+  if (!file) return;
+
+  // Build query string for pages that need params
+  let qs = '';
+  if (name === 'user-profile' && opts.uid) qs = '?uid=' + encodeURIComponent(opts.uid);
+  if (name === 'post-detail' && opts.postId) qs = '?postId=' + encodeURIComponent(opts.postId);
+
+  window.location.href = file + qs;
 }
 
 function goBack() {
-  _pageStack.pop();
-  const prev = _pageStack[_pageStack.length - 1];
-  if (prev) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const pg = $('page-' + prev.name); if (pg) pg.classList.add('active');
-    activePage = prev.name; updateNavActive(); window.scrollTo(0, 0);
-    if (prev.name === 'user-profile') renderUserProfile(prev.opts?.uid);
-    else if (prev.name === 'feed') renderFeed();
-    else if (prev.name === 'discover') renderDiscover();
-    else if (prev.name === 'profile') renderOwnProfile();
-    else if (prev.name === 'post-detail') renderPostDetail(prev.opts?.postId);
-    else if (prev.name === 'notifications') renderNotifications();
-    else if (prev.name === 'messages') renderConversations();
-  } else showPage('feed');
+  if (document.referrer && new URL(document.referrer).origin === window.location.origin) {
+    window.history.back();
+  } else {
+    window.location.href = '/feed.html';
+  }
 }
 
-window.addEventListener('popstate', () => {
-  if (_suppressPopstate) return;
-  if ($('dmFullpage') && $('dmFullpage').style.display !== 'none') {
-    closeDMFullpage();
-    window.history.pushState({}, '', window.location.pathname);
-    return;
-  }
-  goBack();
-  window.history.pushState({}, '', window.location.pathname);
-});
-
 function updateNavActive() {
-  document.querySelectorAll('.nav-link,.mobile-nav-link').forEach(l => l.classList.toggle('active', l.dataset.page === activePage));
+  const current = window.location.pathname.replace(/^\//, '').replace('.html', '') || 'index';
+  document.querySelectorAll('.nav-link,.mobile-nav-link').forEach(l => {
+    const page = l.dataset.page;
+    const match =
+      (page === 'feed' && (current === 'feed' || current === 'index')) ||
+      page === current;
+    l.classList.toggle('active', match);
+  });
 }

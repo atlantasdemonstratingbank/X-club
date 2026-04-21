@@ -1,47 +1,46 @@
-// auth.js — X Club v7 — Authentication, Paywall, Deep Links & Password Reset
-// Load order: 4th
+// auth.js — X Club — Auth, Session, Deep Links (multi-page)
 'use strict';
 
-/* ══════════════════════════════════════════════
-   AUTH
-══════════════════════════════════════════════ */
+/* ── Shared nav/head snippets are injected by each page's boot ── */
+
 async function handleLogin(e) {
   e.preventDefault();
-  const email = $('loginEmail').value.trim(), pass = $('loginPass').value, btn = $('loginBtn');
-  if (!email || !pass) return showToast('Please fill in all fields');
-  btn.disabled = true; btn.textContent = 'Signing in…';
-  try { await window.XF.signIn(email, pass); }
-  catch (err) { showToast(friendlyError(err.code)); btn.disabled = false; btn.textContent = 'Sign in'; }
+  const btn = $('loginBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+  try {
+    await window.XF.signIn($('loginEmail').value.trim(), $('loginPass').value);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+    showToast(friendlyError(err.code));
+  }
 }
 
 async function handleRegister(e) {
   e.preventDefault();
-  const name = $('regName').value.trim(), email = $('regEmail').value.trim(), pass = $('regPass').value;
-  const handle = $('regHandle').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const btn = $('regBtn');
-  if (!name || !email || !pass || !handle) return showToast('Please fill in all fields');
-  if (pass.length < 8) return showToast('Password must be at least 8 characters');
-  if (handle.length < 3) return showToast('Handle must be at least 3 characters');
-  btn.disabled = true; btn.textContent = 'Creating account…';
+  const btn = $('regBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+  const name   = $('regName')?.value.trim();
+  const handle = $('regHandle')?.value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  const email  = $('regEmail')?.value.trim();
+  const pass   = $('regPass')?.value;
+  if (!name || !handle || !email || !pass) { showToast('Fill in all fields'); if (btn) { btn.disabled = false; btn.textContent = 'Create account'; } return; }
+  if (pass.length < 8) { showToast('Password must be at least 8 characters'); if (btn) { btn.disabled = false; btn.textContent = 'Create account'; } return; }
   try {
-    const hSnap = await window.XF.get('handles/' + handle);
-    if (hSnap.exists()) { showToast('@' + handle + ' is already taken'); btn.disabled = false; btn.textContent = 'Create account'; return; }
-    const cred = await window.XF.signUp(email, pass);
-    await window.XF.updateProfile({ displayName: name });
+    const snap = await window.XF.get('handles/' + handle);
+    if (snap.exists()) { showToast('@' + handle + ' is already taken'); if (btn) { btn.disabled = false; btn.textContent = 'Create account'; } return; }
+    const cred = await window.XF.register(email, pass);
     await window.XF.set('users/' + cred.user.uid, { uid: cred.user.uid, displayName: name, handle, email, bio: '', photoURL: '', verified: false, followersCount: 0, followingCount: 0, postsCount: 0, joinedAt: window.XF.ts() });
     await window.XF.set('handles/' + handle, cred.user.uid);
-    showToast('Welcome to X-Musk Financial Club!');
-  } catch (err) { showToast(friendlyError(err.code)); btn.disabled = false; btn.textContent = 'Create account'; }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+    showToast(friendlyError(err.code));
+  }
 }
 
 async function handleGoogleAuth() {
   try {
-    const cred = await window.XF.googleAuth();
+    const cred = await window.XF.googleSignIn();
     const snap = await window.XF.get('users/' + cred.user.uid);
     if (!snap.exists()) {
-      let handle = (cred.user.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
-      const hSnap = await window.XF.get('handles/' + handle);
-      if (hSnap.exists()) handle = handle + Math.floor(Math.random() * 9000 + 1000);
+      const handle = (cred.user.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g,'') + '_' + Date.now().toString(36);
       await window.XF.set('users/' + cred.user.uid, { uid: cred.user.uid, displayName: cred.user.displayName || 'Member', handle, email: cred.user.email || '', bio: '', photoURL: cred.user.photoURL || '', verified: false, followersCount: 0, followingCount: 0, postsCount: 0, joinedAt: window.XF.ts() });
       await window.XF.set('handles/' + handle, cred.user.uid);
     }
@@ -49,7 +48,7 @@ async function handleGoogleAuth() {
 }
 
 async function handleLogout() {
-  await window.XF.signOut(); currentProfile = null; currentUser = null; _pageStack.length = 0; showPage('landing');
+  await window.XF.signOut(); currentProfile = null; currentUser = null; showPage('landing');
 }
 
 function friendlyError(code) {
@@ -65,114 +64,103 @@ function friendlyError(code) {
   }[code]) || 'Something went wrong. Please try again.';
 }
 
+/* ══════════════════════════════════════════════
+   AUTH STATE CHANGE
+   Each page calls this. Each page knows what it needs.
+══════════════════════════════════════════════ */
 async function onAuthChange(user) {
   currentUser = user;
+  const page = window.__PAGE__; // set by each HTML file before boot.js loads
+
   if (user) {
     if (user.email === ADMIN_EMAIL) {
       isAdmin = true;
       const snap = await window.XF.get('users/' + user.uid);
       currentProfile = snap.exists() ? snap.val() : { displayName: 'Admin', uid: user.uid };
-      hideLoader(); showPage('admin'); loadAdminUsers(); setTimeout(injectAdminTools, 400); return;
+      hideLoader();
+      if (page === 'admin') { loadAdminUsers(); setTimeout(injectAdminTools, 400); }
+      else { showPage('admin'); }
+      return;
     }
     isAdmin = false;
     const snap = await window.XF.get('users/' + user.uid);
     currentProfile = snap.exists() ? snap.val() : null;
-    updateNavUser(); updateComposerAvatar(); loadSuggested(); startNotifWatch(); startMsgWatch();
-    updateSidebarVerifyBtn(); _updateMsgRequestBadge();
-    _initPresence(user.uid);
-    const handled = checkProfileDeepLink();
-    if (!handled) {
-      // Check if user just logged in and was redirected from a profile link
-      if (!window._pendingProfileUid) {
-        try { window._pendingProfileUid = sessionStorage.getItem('_pendingProfileUid') || null; } catch (e) {}
-      }
-      if (window._pendingProfileUid) {
-        const pendingUid = window._pendingProfileUid;
-        window._pendingProfileUid = null;
-        try { sessionStorage.removeItem('_pendingProfileUid'); } catch (e) {}
-        if (pendingUid === user.uid) showPage('profile');
-        else setTimeout(() => showPage('user-profile', { uid: pendingUid }), 400);
-      } else if (['landing', 'login', 'register'].includes(activePage)) showPage('feed');
-      else showPage(activePage);
+    updateNavUser(); updateComposerAvatar && updateComposerAvatar();
+    loadSuggested && loadSuggested();
+    startNotifWatch && startNotifWatch();
+    startMsgWatch && startMsgWatch();
+    updateSidebarVerifyBtn && updateSidebarVerifyBtn();
+    _updateMsgRequestBadge && _updateMsgRequestBadge();
+    _initPresence && _initPresence(user.uid);
+
+    hideLoader();
+
+    // Check for pending session profile redirect
+    if (!window._pendingProfileUid) {
+      try { window._pendingProfileUid = sessionStorage.getItem('_pendingProfileUid') || null; } catch(e) {}
     }
-    setTimeout(loadBizFeed, 1500); setTimeout(runScheduledPosts, 5000);
-    checkDeepLink();
+    if (window._pendingProfileUid) {
+      const pendingUid = window._pendingProfileUid;
+      window._pendingProfileUid = null;
+      try { sessionStorage.removeItem('_pendingProfileUid'); } catch(e) {}
+      if (pendingUid === user.uid) showPage('profile');
+      else showPage('user-profile', { uid: pendingUid });
+      return;
+    }
+
+    // If we're on an auth page, redirect to feed
+    if (['landing','login','register','reset'].includes(page)) { showPage('feed'); return; }
+
+    // Page-specific initialisation
+    if (page === 'feed')          { renderFeed(); setTimeout(loadBizFeed, 1500); setTimeout(runScheduledPosts, 5000); }
+    if (page === 'discover')      renderDiscover();
+    if (page === 'notifications') renderNotifications();
+    if (page === 'messages')      renderConversations();
+    if (page === 'profile')       renderOwnProfile();
+    if (page === 'user-profile') {
+      const uid = new URLSearchParams(window.location.search).get('uid');
+      if (uid) renderUserProfile(uid); else showPage('feed');
+    }
+    if (page === 'post-detail') {
+      const postId = new URLSearchParams(window.location.search).get('postId');
+      if (postId) renderPostDetail(postId); else showPage('feed');
+    }
+
   } else {
-    isAdmin = false; currentProfile = null; updateNavUser();
-    updateSidebarVerifyBtn();
-    if (!checkProfileDeepLink()) showPage('landing');
+    isAdmin = false; currentProfile = null;
+    updateNavUser && updateNavUser();
+    updateSidebarVerifyBtn && updateSidebarVerifyBtn();
+    hideLoader();
+
+    // Pages that require auth — send to landing
+    const authRequired = ['feed','discover','notifications','messages','profile','user-profile','post-detail','admin'];
+    if (authRequired.includes(page)) { showPage('landing'); }
+    // Otherwise stay (landing, login, register, reset)
   }
-  hideLoader();
 }
 
 function updateNavUser() {
   const wrap = $('navUserWrap'); if (!wrap) return;
   if (currentUser && currentProfile) {
     wrap.style.display = 'flex';
-    const n = $('navUserName'), h = $('navUserHandle'), a = $('navUserAvatar');
-    if (n) n.innerHTML = escapeHTML(currentProfile.displayName || 'Member') + verifiedBadge(currentProfile.verified);
-    if (h) h.textContent = '@' + (currentProfile.handle || 'member');
-    if (a) a.outerHTML = avatarHTML(currentProfile, 'md').replace('class="avatar', 'id="navUserAvatar" class="avatar');
-  } else wrap.style.display = 'none';
-}
-
-function updateComposerAvatar() {
-  const el = $('composerAvatar');
-  if (el && currentProfile) el.outerHTML = avatarHTML(currentProfile, 'md').replace('class="avatar', 'id="composerAvatar" class="avatar');
+    const nameEl = $('navUserName'); const handleEl = $('navUserHandle'); const avatarEl = $('navUserAvatar');
+    if (nameEl) nameEl.textContent = currentProfile.displayName || '';
+    if (handleEl) handleEl.textContent = '@' + (currentProfile.handle || '');
+    if (avatarEl) {
+      if (currentProfile.photoURL) avatarEl.innerHTML = `<img class="avatar avatar-md" src="${currentProfile.photoURL}" alt="">`;
+      else avatarEl.textContent = (currentProfile.displayName || '?').charAt(0).toUpperCase();
+    }
+  } else {
+    wrap.style.display = 'none';
+  }
 }
 
 /* ══════════════════════════════════════════════
-   PAYWALL
-══════════════════════════════════════════════ */
-function showPaywall() {
-  $('paywallModal').classList.add('open');
-  // Update displayed price from Firebase if admin has changed it
-  window.XF.get('appConfig').then(cfg => {
-    if (cfg.exists() && cfg.val().membershipLabel) {
-      const el = document.querySelector('.paywall-price');
-      if (el) el.textContent = cfg.val().membershipLabel;
-    }
-  }).catch(() => {});
-}
-function closePaywall() { $('paywallModal').classList.remove('open'); }
-
-async function initiatePayment() {
-  if (!currentUser || !currentProfile) { showToast('Please sign in first'); return; }
-  if (typeof FlutterwaveCheckout === 'undefined') { showToast('Payment system loading — try again'); return; }
-  // Read price dynamically from Firebase so admin can update without touching code
-  let amount = MEMBERSHIP_PRICE, currency = MEMBERSHIP_CURRENCY;
-  try {
-    const cfg = await window.XF.get('appConfig');
-    if (cfg.exists()) {
-      const v = cfg.val();
-      if (v.membershipPrice)    amount   = v.membershipPrice;
-      if (v.membershipCurrency) currency = v.membershipCurrency;
-    }
-  } catch (e) { /* fall back to config.js defaults */ }
-  FlutterwaveCheckout({
-    public_key: FLW_PUBLIC_KEY, tx_ref: 'XCLUB-' + currentUser.uid + '-' + Date.now(),
-    amount, currency, payment_options: 'card,banktransfer,ussd',
-    customer: { email: currentUser.email, name: currentProfile.displayName || 'Member' },
-    customizations: { title: 'X Club Membership', description: 'Annual verified membership', logo: '' },
-    callback: async function (data) {
-      if (data.status === 'successful' || data.status === 'completed') {
-        try {
-          await window.XF.update('users/' + currentUser.uid, { verified: true, verifiedAt: window.XF.ts(), paymentRef: data.transaction_id || data.tx_ref });
-          currentProfile.verified = true; closePaywall(); showToast('✦ You are now a verified member!');
-          updateNavUser(); renderOwnProfile();
-        } catch (err) { showToast('Payment confirmed but update failed — contact support'); }
-      } else showToast('Payment was not completed');
-    },
-    onclose: function () {}
-  });
-}
-
-/* ══════════════════════════════════════════════
-   DEEP LINK  (?post=ID)
+   DEEP LINK  (?post=ID)  — used by share button in feed.js
 ══════════════════════════════════════════════ */
 function checkDeepLink() {
   const params = new URLSearchParams(window.location.search); const postId = params.get('post');
-  if (postId && currentUser) { window.history.replaceState({}, '', window.location.pathname); setTimeout(() => showPage('post-detail', { postId }), 800); }
+  if (postId && currentUser) { setTimeout(() => showPage('post-detail', { postId }), 800); }
 }
 
 /* ══════════════════════════════════════════════
@@ -185,70 +173,34 @@ async function sendReset() {
 }
 
 /* ══════════════════════════════════════════════
-   PROFILE SHARING DEEP LINK  (?user=HANDLE or ?uid=UID)
+   PAYMENT / VERIFICATION
 ══════════════════════════════════════════════ */
-function checkProfileDeepLink() {
-  const params = new URLSearchParams(window.location.search);
-  const handle = params.get('user'); const uid = params.get('uid');
-  if (!handle && !uid) return false;
-  window.history.replaceState({}, '', window.location.pathname);
-  (async () => {
-    try {
-      let targetUid = uid;
-      if (!targetUid && handle) {
-        const snap = await window.XF.get('handles/' + handle.toLowerCase());
-        targetUid = snap.exists() ? snap.val() : null;
-      }
-      if (!targetUid) { showToast('Profile not found'); showPage(currentUser ? 'feed' : 'landing'); return; }
-      if (currentUser && targetUid === currentUser.uid) { showPage('profile'); return; }
-      if (!currentUser) {
-        // Not logged in — persist target to sessionStorage so it survives
-        // the login flow (window._pendingProfileUid is lost on page reload)
-        window._pendingProfileUid = targetUid;
-        try { sessionStorage.setItem('_pendingProfileUid', targetUid); } catch (e) {}
-        showPage('landing');
-        return;
-      }
-      showPage('user-profile', { uid: targetUid });
-    } catch (e) { showToast('Could not load profile'); showPage(currentUser ? 'feed' : 'landing'); }
-  })();
-  return true;
+function showPaywall() {
+  const m = $('paywallModal'); if (m) m.classList.add('open');
 }
-
-/* ══════════════════════════════════════════════
-   SIDEBAR: hide Get Verified for verified members
-══════════════════════════════════════════════ */
-function updateSidebarVerifyBtn() {
-  const btn = $('sidebarVerifyBtn'); if (!btn) return;
-  btn.style.display = (currentUser && currentProfile?.verified) ? 'none' : 'block';
+function closePaywall() {
+  const m = $('paywallModal'); if (m) m.classList.remove('open');
 }
-
-/* ══════════════════════════════════════════════
-   PRESENCE — online / last seen
-   Uses Firebase onDisconnect so "offline + lastSeen"
-   is written server-side even if the tab crashes.
-══════════════════════════════════════════════ */
-function _initPresence(uid) {
-  const presRef = window.XF.db.ref('presence/' + uid);
-
-  // Write online immediately — don't wait for .info/connected which can be
-  // unreliable depending on SDK init timing
-  presRef.set({ online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP })
-    .catch(e => console.error('[Presence] write failed:', e));
-
-  // onDisconnect is what makes last seen work — registered separately
-  presRef.onDisconnect().update({
-    online: false,
-    lastSeen: firebase.database.ServerValue.TIMESTAMP
-  });
-
-  // Re-register onDisconnect whenever connection is restored (handles reconnects)
-  window.XF.db.ref('.info/connected').on('value', snap => {
-    if (!snap.val()) return;
-    presRef.onDisconnect().update({
-      online: false,
-      lastSeen: firebase.database.ServerValue.TIMESTAMP
-    });
-    presRef.update({ online: true });
+function initiatePayment() {
+  if (!currentUser || !currentProfile) { showToast('Sign in first'); return; }
+  const settings = window._appSettings || {};
+  const price = settings.membershipPrice || MEMBERSHIP_PRICE;
+  const currency = settings.membershipCurrency || MEMBERSHIP_CURRENCY;
+  FlutterwaveCheckout({
+    public_key: FLW_PUBLIC_KEY,
+    tx_ref: 'xclub-' + currentUser.uid + '-' + Date.now(),
+    amount: price, currency,
+    customer: { email: currentUser.email, name: currentProfile.displayName },
+    customizations: { title: 'X-Musk Financial Club', description: 'Verified Membership', logo: '' },
+    callback: async function(data) {
+      if (data.status === 'successful' || data.status === 'completed') {
+        try {
+          await window.XF.update('users/' + currentUser.uid, { verified: true, verifiedAt: window.XF.ts(), paymentRef: data.transaction_id || data.tx_ref });
+          currentProfile.verified = true; closePaywall(); showToast('✦ You are now a verified member!');
+          updateNavUser(); renderOwnProfile && renderOwnProfile();
+        } catch (err) { showToast('Payment confirmed but update failed — contact support'); }
+      } else showToast('Payment was not completed');
+    },
+    onclose: function () {}
   });
 }

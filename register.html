@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Home — X-Musk Financial Club</title>
+  <title>Register — X-Musk Financial Club</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#000000">
@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json">
   <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e)); }); }</script>
 
-  <script>window.__PAGE__ = 'landing';</script>
+  <script>window.__PAGE__ = 'register';</script>
 </head>
 <body>
 <div id="appLoader">
@@ -29,52 +29,24 @@
 
 
 
-    <div id="page-landing">
-      <div class="landing-bg">
-        <div class="landing-bg-grid"></div>
-        <div class="landing-bg-glow landing-bg-glow-1"></div>
-        <div class="landing-bg-glow landing-bg-glow-2"></div>
-        <div class="landing-bg-glow landing-bg-glow-3"></div>
-        <div class="landing-particles" id="landingParticles"></div>
-      </div>
-      <div class="landing-topbar">
-        <div class="landing-topbar-logo"><span class="landing-topbar-x">✕</span><span class="landing-topbar-name">X-Musk Financial Club</span></div>
-        <button class="landing-topbar-signin" onclick="showPage('login')">Sign in</button>
-      </div>
-      <div class="landing-hero">
-        <div class="landing-badge"><span class="landing-badge-dot"></span><span>Verified Members Only · Est. 2024</span></div>
-        <div class="landing-logomark">
-          <div class="landing-logomark-ring landing-logomark-ring-1"></div>
-          <div class="landing-logomark-ring landing-logomark-ring-2"></div>
-          <div class="landing-logomark-ring landing-logomark-ring-3"></div>
-          <div class="landing-logomark-inner"><svg viewBox="0 0 48 48" fill="none" width="40" height="40"><path d="M8 8L24 24M24 24L40 8M24 24L8 40M24 24L40 40" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></div>
-        </div>
-        <h1 class="landing-headline">
-          <span class="landing-headline-serif">X-Musk</span>
-          <span class="landing-headline-divider"><span class="landing-headline-line"></span><span class="landing-headline-diamond">◆</span><span class="landing-headline-line"></span></span>
-          <span class="landing-headline-sans">Financial Club</span>
-        </h1>
-        <p class="landing-tagline">Where capital meets conviction.<br><em>A private network for the world's serious investors.</em></p>
-        <div class="landing-stats">
-          <div class="landing-stat"><div class="landing-stat-num">€1.2B+</div><div class="landing-stat-label">Capital Deployed</div></div>
-          <div class="landing-stat-divider"></div>
-          <div class="landing-stat"><div class="landing-stat-num">3,400+</div><div class="landing-stat-label">Verified Members</div></div>
-          <div class="landing-stat-divider"></div>
-          <div class="landing-stat"><div class="landing-stat-num">47</div><div class="landing-stat-label">Countries</div></div>
-        </div>
-        <div class="landing-ctas">
-          <button class="landing-cta-primary" onclick="showPage('register')"><span>Apply for Membership</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
-          <button class="landing-cta-secondary" onclick="showPage('login')">Already a member? <strong>Sign in →</strong></button>
-          <button id="pwaInstallBtn" class="landing-cta-install" onclick="triggerPwaInstall()" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Add to Home Screen</button>
-        </div>
-        <div class="landing-features">
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Private Investor Network</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Live Deal Rooms</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>AI Business Intelligence</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Verified Identity Only</div>
+    <div class="page active" id="page-register">
+      <div class="auth-page">
+        <div class="auth-card">
+          <div class="auth-logo"><svg viewBox="0 0 24 24" fill="none" width="32" height="32"><path d="M4 4L12 12M12 12L20 4M12 12L4 20M12 12L20 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+          <div class="auth-title">Join X-Musk Financial Club</div>
+          <div class="auth-sub">Create your account — free to join, verify to unlock everything</div>
+          <form onsubmit="handleRegister(event)">
+            <div class="form-group"><label class="form-label">Full Name</label><input id="regName" class="form-input" type="text" placeholder="Alexandra Smith" autocomplete="name"></div>
+            <div class="form-group"><label class="form-label">Username</label><div style="position:relative"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-dim)">@</span><input id="regHandle" class="form-input" type="text" placeholder="yourhandle" style="padding-left:30px" autocomplete="username"></div></div>
+            <div class="form-group"><label class="form-label">Email</label><input id="regEmail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email"></div>
+            <div class="form-group"><label class="form-label">Password</label><input id="regPass" class="form-input" type="password" placeholder="Min. 8 characters" autocomplete="new-password"></div>
+            <button id="regBtn" class="btn btn-primary btn-block" type="submit">Create account</button>
+          </form>
+          <div class="divider">or</div>
+          <button class="btn-google" onclick="handleGoogleAuth()"><svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>Continue with Google</button>
+          <div class="auth-footer">Already a member? <a onclick="showPage('login')">Sign in</a></div>
         </div>
       </div>
-      <div class="landing-footer"><p>By joining you agree to the <a href="#" onclick="return false">Terms of Service</a> and <a href="#" onclick="return false">Privacy Policy</a></p></div>
     </div>
 
 

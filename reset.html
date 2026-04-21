@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Home — X-Musk Financial Club</title>
+  <title>Reset Password — X-Musk Financial Club</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#000000">
@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json">
   <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e)); }); }</script>
 
-  <script>window.__PAGE__ = 'landing';</script>
+  <script>window.__PAGE__ = 'reset';</script>
 </head>
 <body>
 <div id="appLoader">
@@ -29,52 +29,17 @@
 
 
 
-    <div id="page-landing">
-      <div class="landing-bg">
-        <div class="landing-bg-grid"></div>
-        <div class="landing-bg-glow landing-bg-glow-1"></div>
-        <div class="landing-bg-glow landing-bg-glow-2"></div>
-        <div class="landing-bg-glow landing-bg-glow-3"></div>
-        <div class="landing-particles" id="landingParticles"></div>
-      </div>
-      <div class="landing-topbar">
-        <div class="landing-topbar-logo"><span class="landing-topbar-x">✕</span><span class="landing-topbar-name">X-Musk Financial Club</span></div>
-        <button class="landing-topbar-signin" onclick="showPage('login')">Sign in</button>
-      </div>
-      <div class="landing-hero">
-        <div class="landing-badge"><span class="landing-badge-dot"></span><span>Verified Members Only · Est. 2024</span></div>
-        <div class="landing-logomark">
-          <div class="landing-logomark-ring landing-logomark-ring-1"></div>
-          <div class="landing-logomark-ring landing-logomark-ring-2"></div>
-          <div class="landing-logomark-ring landing-logomark-ring-3"></div>
-          <div class="landing-logomark-inner"><svg viewBox="0 0 48 48" fill="none" width="40" height="40"><path d="M8 8L24 24M24 24L40 8M24 24L8 40M24 24L40 40" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></div>
-        </div>
-        <h1 class="landing-headline">
-          <span class="landing-headline-serif">X-Musk</span>
-          <span class="landing-headline-divider"><span class="landing-headline-line"></span><span class="landing-headline-diamond">◆</span><span class="landing-headline-line"></span></span>
-          <span class="landing-headline-sans">Financial Club</span>
-        </h1>
-        <p class="landing-tagline">Where capital meets conviction.<br><em>A private network for the world's serious investors.</em></p>
-        <div class="landing-stats">
-          <div class="landing-stat"><div class="landing-stat-num">€1.2B+</div><div class="landing-stat-label">Capital Deployed</div></div>
-          <div class="landing-stat-divider"></div>
-          <div class="landing-stat"><div class="landing-stat-num">3,400+</div><div class="landing-stat-label">Verified Members</div></div>
-          <div class="landing-stat-divider"></div>
-          <div class="landing-stat"><div class="landing-stat-num">47</div><div class="landing-stat-label">Countries</div></div>
-        </div>
-        <div class="landing-ctas">
-          <button class="landing-cta-primary" onclick="showPage('register')"><span>Apply for Membership</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
-          <button class="landing-cta-secondary" onclick="showPage('login')">Already a member? <strong>Sign in →</strong></button>
-          <button id="pwaInstallBtn" class="landing-cta-install" onclick="triggerPwaInstall()" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Add to Home Screen</button>
-        </div>
-        <div class="landing-features">
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Private Investor Network</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Live Deal Rooms</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>AI Business Intelligence</div>
-          <div class="landing-feature"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Verified Identity Only</div>
+    <div class="page active" id="page-reset">
+      <div class="auth-page">
+        <div class="auth-card">
+          <div class="auth-logo"><svg viewBox="0 0 24 24" fill="none" width="32" height="32"><path d="M4 4L12 12M12 12L20 4M12 12L4 20M12 12L20 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+          <div class="auth-title">Reset password</div>
+          <div class="auth-sub">Enter your email and we'll send you a reset link</div>
+          <div class="form-group"><label class="form-label">Email</label><input id="resetEmail" class="form-input" type="email" placeholder="you@example.com"></div>
+          <button class="btn btn-primary btn-block" onclick="sendReset()">Send reset link</button>
+          <div class="auth-footer" style="margin-top:16px"><a onclick="showPage('login')">← Back to sign in</a></div>
         </div>
       </div>
-      <div class="landing-footer"><p>By joining you agree to the <a href="#" onclick="return false">Terms of Service</a> and <a href="#" onclick="return false">Privacy Policy</a></p></div>
     </div>
 
 
